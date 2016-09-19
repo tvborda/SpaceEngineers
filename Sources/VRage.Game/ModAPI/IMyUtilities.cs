@@ -31,15 +31,41 @@ namespace VRage.Game.ModAPI
         event MessageEnteredDel MessageEntered;
 
         bool FileExistsInGlobalStorage(string file);
+#if !XB1
         bool FileExistsInLocalStorage(string file, Type callingType);
+        bool FileExistsInWorldStorage(string file, Type callingType);
+#endif // !XB1
 
-        void DeleteFileInLocalStorage(string file, Type callingType);
         void DeleteFileInGlobalStorage(string file);
+#if !XB1
+        void DeleteFileInLocalStorage(string file, Type callingType);
+        void DeleteFileInWorldStorage(string file, Type callingType);
+#endif // !XB1
 
         System.IO.TextReader ReadFileInGlobalStorage(string file);
+#if !XB1
         System.IO.TextReader ReadFileInLocalStorage(string file, Type callingType);
+        /// <summary>
+        /// Read text file from the current world's Storage directory.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="callingType"></param>
+        /// <returns></returns>
+        /// <remarks>This directory is under Saves\&lt;SteamId&gt;\&lt;WorldName&gt;\Storage</remarks>
+        System.IO.TextReader ReadFileInWorldStorage(string file, Type callingType);
+#endif // !XB1
         System.IO.TextWriter WriteFileInGlobalStorage(string file);
+#if !XB1
         System.IO.TextWriter WriteFileInLocalStorage(string file, Type callingType);
+        /// <summary>
+        /// Write text file to the current world's Storage directory.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="callingType"></param>
+        /// <returns></returns>
+        System.IO.TextWriter WriteFileInWorldStorage(string file, Type callingType);
+#endif // !XB1
+
         IMyGamePaths GamePaths { get; }
         bool IsDedicated { get; }
         string SerializeToXML<T>(T objToSerialize);
@@ -49,9 +75,27 @@ namespace VRage.Game.ModAPI
         IMyHudObjectiveLine GetObjectiveLine();
 
         System.IO.BinaryReader ReadBinaryFileInGlobalStorage(string file);
+#if !XB1
         System.IO.BinaryReader ReadBinaryFileInLocalStorage(string file, Type callingType);
+        /// <summary>
+        /// Read file from the current world's Storage directory.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="callingType"></param>
+        /// <returns></returns>
+        System.IO.BinaryReader ReadBinaryFileInWorldStorage(string file, Type callingType);
+#endif // !XB1
         System.IO.BinaryWriter WriteBinaryFileInGlobalStorage(string file);
+#if !XB1
         System.IO.BinaryWriter WriteBinaryFileInLocalStorage(string file, Type callingType);
+        /// <summary>
+        /// Write file to the current world's Storage directory.
+        /// </summary>
+        /// <param name="file"></param>
+        /// <param name="callingType"></param>
+        /// <returns></returns>
+        System.IO.BinaryWriter WriteBinaryFileInWorldStorage(string file, Type callingType);
+#endif // !XB1
 
         void SetVariable<T>(string name, T value);
         bool GetVariable<T>(string name, out T value);

@@ -2,6 +2,7 @@
 
 using SharpDX.Multimedia;
 using SharpDX.XAudio2;
+using SharpDX.XAudio2.Fx;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -12,7 +13,6 @@ using VRage.Audio.X3DAudio;
 using VRage.Collections;
 using VRage.Data.Audio;
 using VRage.FileSystem;
-using VRage.Library.Utils;
 using VRage.Trace;
 using VRage.Utils;
 using VRageMath;
@@ -21,6 +21,10 @@ namespace VRage.Audio
 {
     public class MyXAudio2 : IMyAudio
     {
+        VoiceSendDescriptor[] m_gameAudioVoiceDesc;
+        VoiceSendDescriptor[] m_musicAudioVoiceDesc;
+        VoiceSendDescriptor[] m_hudAudioVoiceDesc;
+
         MyAudioInitParams m_initParams;
 
         XAudio2 m_audioEngine;
@@ -29,9 +33,6 @@ namespace VRage.Audio
         SubmixVoice m_gameAudioVoice;
         SubmixVoice m_musicAudioVoice;
         SubmixVoice m_hudAudioVoice;
-        VoiceSendDescriptor[] m_gameAudioVoiceDesc;
-        VoiceSendDescriptor[] m_musicAudioVoiceDesc;
-        VoiceSendDescriptor[] m_hudAudioVoiceDesc;
 
         MyCueBank m_cueBank;
         MyEffectBank m_effectBank;
@@ -97,6 +98,9 @@ namespace VRage.Audio
         delegate void VolumeChangeHandler(float newVolume);
         event VolumeChangeHandler OnSetVolumeHud, OnSetVolumeGame, OnSetVolumeMusic;
 
+        //reverb
+        private Reverb m_reverb = null;
+        private bool m_applyReverb = false;
 
         Dictionary<MyCueId, MySoundData>.ValueCollection IMyAudio.CueDefinitions { get { return m_canPlay ? m_cueBank.CueDefinitions : null; } }
         List<MyStringId> IMyAudio.GetCategories() { return m_canPlay ? m_cueBank.GetCategories() : null; }
@@ -107,6 +111,8 @@ namespace VRage.Audio
         public bool GameSoundIsPaused { get; private set; }
         private bool m_useVolumeLimiter = false;
         private bool m_useSameSoundLimiter = false;
+        private bool m_soundLimiterReady = false;
+        private bool m_soundLimiterSet = false;
         bool IMyAudio.UseVolumeLimiter
         { 
             get
@@ -152,7 +158,7 @@ namespace VRage.Audio
             }
 
             // Init/reinit engine
-            m_audioEngine = new XAudio2();
+            m_audioEngine = new XAudio2(XAudio2Version.Version27);
 
             // A way to disable SharpDX callbacks
             //var meth = m_audioEngine.GetType().GetMethod("UnregisterForCallbacks_", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -191,16 +197,20 @@ namespace VRage.Audio
                 }
             }
 
-            m_masterVoice = new MasteringVoice(m_audioEngine, deviceIndex: m_deviceNumber);
+            m_masterVoice = new MasteringVoice(m_audioEngine, XAudio2.DefaultChannels, XAudio2.DefaultSampleRate, m_deviceNumber);
             
             if (m_useVolumeLimiter)
             {
-                var limiter = new SharpDX.XAPO.Fx.MasteringLimiter();
+                var limiter = new SharpDX.XAPO.Fx.MasteringLimiter(m_audioEngine);
                 var param = limiter.Parameter;
-                param.Loudness = 20;
+                param.Loudness = 0;
                 limiter.Parameter = param;
-                m_masterVoice.SetEffectChain(new EffectDescriptor[] { new EffectDescriptor(limiter) });
-                m_masterVoice.EnableEffect(0);
+                //TODO: this throws exception in 3.0.1 version
+                var effectDescriptor = new EffectDescriptor(limiter);
+                m_masterVoice.SetEffectChain(effectDescriptor);
+                m_soundLimiterReady = true;
+                m_masterVoice.DisableEffect(0);
+                //m_masterVoice.EnableEffect(0);
                 //limiter.Dispose();
             }
 
@@ -210,8 +220,7 @@ namespace VRage.Audio
                 m_calculateFlags |= CalculateFlags.RedirectToLfe;
             }
 
-            var masterDetails = m_masterVoice.VoiceDetails;
-
+			var masterDetails = m_masterVoice.VoiceDetails;
             m_gameAudioVoice = new SubmixVoice(m_audioEngine, masterDetails.InputChannelCount, masterDetails.InputSampleRate);
             m_musicAudioVoice = new SubmixVoice(m_audioEngine, masterDetails.InputChannelCount, masterDetails.InputSampleRate);
             m_hudAudioVoice = new SubmixVoice(m_audioEngine, masterDetails.InputChannelCount, masterDetails.InputSampleRate);
@@ -223,6 +232,30 @@ namespace VRage.Audio
             { // keep sounds muted 
                 m_gameAudioVoice.SetVolume(0);
                 m_musicAudioVoice.SetVolume(0);
+            }
+
+            m_reverb = new Reverb(m_audioEngine);
+            m_gameAudioVoice.SetEffectChain(new EffectDescriptor(m_reverb, masterDetails.InputChannelCount));
+            m_gameAudioVoice.DisableEffect(0);
+        }
+
+        public void SetReverbParameters(float diffusion, float roomSize)
+        {
+            /*ReverbParameters newParameters = new ReverbParameters();
+            newParameters.Diffusion = MyMath.Clamp(diffusion, Reverb.MinimumDiffusion, Reverb.MaximumDiffusion);
+            newParameters.RoomSize = MyMath.Clamp(roomSize, Reverb.MinimumRoomsize, Reverb.MaximumRoomsize);
+            m_reverb.Parameter = newParameters;*/
+        }
+
+        public void EnableMasterLimiter(bool enable)
+        {
+            if (m_useVolumeLimiter && m_soundLimiterReady && enable != m_soundLimiterSet)
+            {
+                if (enable)
+                    m_masterVoice.EnableEffect(0);
+                else
+                    m_masterVoice.DisableEffect(0);
+                m_soundLimiterSet = enable;
             }
         }
 
@@ -369,9 +402,6 @@ namespace VRage.Audio
                 m_helperEmitter = new Emitter();
                 m_helperEmitter.SetDefaultValues();
 
-                //  This is reverb turned to off, so we hear sounds as they are defined in wav files
-                ApplyReverb = false;
-
                 m_musicOn = true;
                 m_gameSoundsOn = true;
            
@@ -473,7 +503,7 @@ namespace VRage.Audio
                 if (m_cueBank == null)
                     return false;
 
-                return m_cueBank.ApplyReverb;
+                return m_applyReverb;
             }
             set
             {
@@ -483,7 +513,16 @@ namespace VRage.Audio
                 if (m_cueBank == null)
                     return;
 
+                if (m_gameAudioVoice != null)
+                {
+                    if (value)
+                        m_gameAudioVoice.EnableEffect(0);
+                    else
+                        m_gameAudioVoice.DisableEffect(0);
+                }
+
                 m_cueBank.ApplyReverb = value;
+                m_applyReverb = value;
             }
         }
 
@@ -695,7 +734,7 @@ namespace VRage.Audio
 
         public void PlayMusic(MyMusicTrack? track = null, int priorityForRandom = 0)
         {
-            if (!m_canPlay)
+            if (!m_canPlay || !m_musicAllowed)
                 return;
             Mute = false;
             bool playRandom = false;
@@ -720,9 +759,9 @@ namespace VRage.Audio
             }
         }
 
-        public IMySourceVoice PlayMusicCue(MyCueId musicCue)
+        public IMySourceVoice PlayMusicCue(MyCueId musicCue, bool overrideMusicAllowed = false)
         {
-            if (!m_canPlay)
+            if (!m_canPlay || (!m_musicAllowed && !overrideMusicAllowed))
                 return null;
             Mute = false;
             m_musicCue = PlaySound(musicCue);
@@ -972,7 +1011,7 @@ namespace VRage.Audio
 
         private void PlayMusicByTransition(MyMusicTransition transition)
         {
-            if (m_cueBank != null)
+            if (m_cueBank != null && m_musicAllowed)
             {
                 m_musicCue = PlaySound(m_cueBank.GetTransitionCue(transition.TransitionEnum, transition.Category));
                 if (m_musicCue != null)
@@ -1125,6 +1164,8 @@ namespace VRage.Audio
 
             if (customMaxDistance > 0)
                 return (distanceToSound <= customMaxDistance * customMaxDistance);
+            else if (cueDefinition.UpdateDistance > 0)
+                return (distanceToSound <= cueDefinition.UpdateDistance * cueDefinition.UpdateDistance);
             else
                 return (distanceToSound <= cueDefinition.MaxDistance * cueDefinition.MaxDistance);
         }
@@ -1283,21 +1324,26 @@ namespace VRage.Audio
         }
 
 
-        public IMyAudioEffect ApplyEffect(IMySourceVoice input, MyStringHash effect, MyCueId[] cueIds = null, float? duration = null)
+        public IMyAudioEffect ApplyEffect(IMySourceVoice input, MyStringHash effect, MyCueId[] cueIds = null, float? duration = null, bool musicEffect = false)
         {
             if (m_effectBank == null)
                 return null;
 			int waveNumber;
             List<MySourceVoice> voices = new List<MySourceVoice>();
-            if(cueIds != null)
-                foreach(var cueId in cueIds)
+            if (cueIds != null)
+            {
+                foreach (var cueId in cueIds)
                 {
                     var sound = GetSound(cueId, out waveNumber);
                     System.Diagnostics.Debug.Assert(sound != null, "Missing sound " + cueId);
                     if (sound != null)
                         voices.Add(sound);
                 }
-            return m_effectBank.CreateEffect(input, effect, voices.ToArray(), duration);
+            }
+            IMyAudioEffect result = m_effectBank.CreateEffect(input, effect, voices.ToArray(), duration);
+            if (musicEffect && result.OutputSound is MySourceVoice)
+                (result.OutputSound as MySourceVoice).SetOutputVoices(m_musicAudioVoiceDesc);
+            return result;
         }
     }
 }

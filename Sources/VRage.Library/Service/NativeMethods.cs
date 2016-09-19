@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if !XB1
+using System;
 using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Text;
@@ -8,7 +9,7 @@ namespace VRage.Service
     internal static class NativeMethods
     {
 
-#if !BLIT
+#if !UNSHARPER
 
         public static readonly string DATABASE_ACTIVE = "ServicesActive";
         public static readonly string DATABASE_FAILED = "ServicesFailed";
@@ -386,3 +387,4 @@ namespace VRage.Service
 
     }
 }
+#endif // !XB1

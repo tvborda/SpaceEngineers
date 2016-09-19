@@ -4,18 +4,16 @@ using Sandbox.Game.Entities;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using VRage;
 using VRage.Algorithms;
 using VRage.Collections;
 using VRage.Utils;
-using VRage.Voxels;
 using VRage.Trace;
 using VRageMath;
 using VRage.Generics;
-using Sandbox.Game.World;
-using VRageMath.Spatial;
+using VRage.Profiler;
+using VRage.Voxels;
+using VRageRender.Utils;
 
 namespace Sandbox.Game.AI.Pathfinding
 {
@@ -442,7 +440,7 @@ namespace Sandbox.Game.AI.Pathfinding
             MyTrace.Send(TraceWindow.Ai, "Adding cell " + cellPos);
 
             m_connectionHelper.ClearCell();
-            m_vertexMapping.Init(generatedMesh.VerticesCount);
+            m_vertexMapping.Resize(generatedMesh.VerticesCount);
 
             // Prepare list of possibly intersecting cube grids for voxel-grid navmesh intersection testing
             Vector3D bbMin = m_voxelMap.PositionLeftBottomCorner + (m_cellSize * (m_bbMinOffset + cellPos));

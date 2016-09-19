@@ -52,6 +52,7 @@
 				<TypeId>PhysicalMaterialDefinition</TypeId>
 				<SubtypeId>Glass</SubtypeId>
 			</Id>
+      <Transparent>true</Transparent>
 		</PhysicalMaterial>
 		<PhysicalMaterial>
 			<Id>
@@ -74,7 +75,7 @@
 	<PhysicalMaterial>
       <Id>
         <TypeId>PhysicalMaterialDefinition</TypeId>
-        <SubtypeId>Cyberhound</SubtypeId>
+        <SubtypeId>Wolf</SubtypeId>
       </Id>
     </PhysicalMaterial>
 		<PhysicalMaterial>

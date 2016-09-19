@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Configuration;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.NetworkInformation;
@@ -12,22 +10,38 @@ using SharpDX.Diagnostics;
 using SharpDX.Direct3D;
 using SharpDX.DXGI;
 using SharpDX.Direct3D11;
-using VRageRender.Resources;
 using VRageRender.Vertex;
 using Device = SharpDX.Direct3D11.Device;
 using Vector2 = VRageMath.Vector2;
 using VRageMath;
 using VRage.Win32;
+using SharpDX.WIC;
+using VRage.Render11.RenderContext;
+using VRage.Render11.Resources;
 
 namespace VRageRender
 {
     partial class MyRender11
     {
         internal static Device Device { get; private set; }
-        internal static DeviceContext DeviceContext { get; private set; }
+        private static MyRenderContext m_rc;
+        internal static MyRenderContext RC
+        {
+            get
+            {
+                return m_rc;
+            }
+            private set
+            {
+                MyRender11.Log.WriteLine("Device Context change");
+                m_rc = value;
+            }
+        }
+        internal static ImagingFactory WIC { get; private set; }
 
-        static MyRenderDeviceSettings m_settings = new MyRenderDeviceSettings { AdapterOrdinal = -1 };
-        static IntPtr m_windowHandle;
+        private static MyRenderDeviceSettings m_settings = new MyRenderDeviceSettings { AdapterOrdinal = -1 };
+        private static IntPtr m_windowHandle;
+        internal static MyRenderDeviceSettings DeviceSettings { get { return m_settings; } }
 
         internal static Vector2 ResolutionF { get { return new Vector2(m_resolution.X, m_resolution.Y); } }
         internal static Vector2I ResolutionI { get { return m_resolution; } }
@@ -51,6 +65,14 @@ namespace VRageRender
                 DebugInfoQueue.SetBreakOnSeverity(MessageSeverity.Error, true);
                 DebugInfoQueue.MessageCountLimit = 4096;
                 DebugInfoQueue.ClearStorageFilter();
+                if (! VRage.MyCompilationSymbols.DX11DebugOutputEnableInfo)
+                {
+                    InfoQueueFilter filter = new InfoQueueFilter();
+                    filter.DenyList = new InfoQueueFilterDescription();
+                    filter.DenyList.Severities = new MessageSeverity[1];
+                    filter.DenyList.Severities[0] = MessageSeverity.Information;
+                    DebugInfoQueue.AddStorageFilterEntries(filter);
+                }
             }
         }
         private static long m_lastSkippedCount;
@@ -79,11 +101,7 @@ namespace VRageRender
         internal static void HandleDeviceReset()
         {
             ResetAdaptersList();
-            DisposeDevice();
             CreateDevice(m_windowHandle, m_settings);
-
-            MyRenderContext.OnDeviceReset();
-            MyRenderContextPool.OnDeviceReset();
 
             OnDeviceReset();
         }
@@ -120,80 +138,142 @@ namespace VRageRender
             return adapterIndex;
         }
 
+#if XB1
+        private static MyRenderDeviceSettings CreateXB1Settings()
+        {
+            return new MyRenderDeviceSettings()
+            {
+                AdapterOrdinal = 0,
+                BackBufferHeight = 720,
+                BackBufferWidth = 1280,
+                WindowMode = MyWindowModeEnum.Window,
+                VSync = true,
+            };
+        }
+#endif
+
         internal static MyRenderDeviceSettings CreateDevice(IntPtr windowHandle, MyRenderDeviceSettings? settingsToTry)
         {
-            bool deviceCreated = CreateDeviceInternalSafe(windowHandle, settingsToTry);
+            MyRenderExceptionEnum exceptionEnum;
+            bool deviceCreated = CreateDeviceInternalSafe(windowHandle, settingsToTry, out exceptionEnum);
 
-            if (!deviceCreated)
+#if !XB1
+            if (!settingsToTry.HasValue || !settingsToTry.Value.SettingsMandatory)
             {
-                Log.WriteLine("Primary desktop size fallback.");
-                var adapters = GetAdaptersList();
-                int i = 0;
-                int j = 0;
-                for (; i < adapters.Length; ++i)
+                if (!deviceCreated)
                 {
-                    for (j = 0; j < adapters[i].SupportedDisplayModes.Length; ++j)
+                    if (settingsToTry.HasValue && settingsToTry.Value.UseStereoRendering)
                     {
-                        if (adapters[i].IsDx11Supported)
+                        var newSettings = settingsToTry.Value;
+                        newSettings.UseStereoRendering = false;
+                        deviceCreated = CreateDeviceInternalSafe(windowHandle, newSettings, out exceptionEnum);
+                    }
+                }
+                if (!deviceCreated)
+                {
+                    Log.WriteLine("Primary desktop size fallback.");
+                    var adapters = GetAdaptersList();
+                    int i = 0;
+                    int j = 0;
+                    for (; i < adapters.Length; ++i)
+                    {
+                        for (j = 0; j < adapters[i].SupportedDisplayModes.Length; ++j)
                         {
-                            var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
-                            if (adapters[i].SupportedDisplayModes[j].Width == bounds.Width &&
-                                adapters[i].SupportedDisplayModes[j].Height == bounds.Height)
+                            if (adapters[i].IsDx11Supported)
                             {
-                                var displayMode = adapters[i].SupportedDisplayModes[j];
-                                var newSettings = new MyRenderDeviceSettings()
+                                var bounds = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                                if (adapters[i].SupportedDisplayModes[j].Width == bounds.Width &&
+                                    adapters[i].SupportedDisplayModes[j].Height == bounds.Height)
                                 {
-                                    AdapterOrdinal = i,
-                                    BackBufferHeight = displayMode.Height,
-                                    BackBufferWidth = displayMode.Width,
-                                    WindowMode = MyWindowModeEnum.Fullscreen,
-                                    RefreshRate = displayMode.RefreshRate,
-                                    VSync = true
-                                };
+                                    var displayMode = adapters[i].SupportedDisplayModes[j];
+                                    var newSettings = new MyRenderDeviceSettings()
+                                    {
+                                        AdapterOrdinal = i,
+                                        BackBufferHeight = displayMode.Height,
+                                        BackBufferWidth = displayMode.Width,
+                                        WindowMode = MyWindowModeEnum.Fullscreen,
+                                        RefreshRate = displayMode.RefreshRate,
+                                        VSync = true
+                                    };
 
-                                deviceCreated = CreateDeviceInternalSafe(windowHandle, newSettings);
-                                if (deviceCreated)
-                                    return m_settings;
+                                    deviceCreated = CreateDeviceInternalSafe(windowHandle, newSettings, out exceptionEnum);
+                                    break;
+                                }
                             }
                         }
                     }
                 }
-            }
-            if (!deviceCreated)
-            {
-                Log.WriteLine("Lowest res fallback.");
-                var simpleSettings = new MyRenderDeviceSettings()
-                {
-                    AdapterOrdinal = 0,
-                    BackBufferHeight = 480,
-                    BackBufferWidth = 640,
-                    WindowMode = MyWindowModeEnum.Window,
-                    VSync = true,
-                };
-                deviceCreated = CreateDeviceInternalSafe(windowHandle, simpleSettings);
                 if (!deviceCreated)
                 {
-                    m_settings.AdapterOrdinal = -1;
-                    VRage.Utils.MyMessageBox.Show("Unsupported graphics card", "Graphics card is not supported, please see minimum requirements");
-                    throw new MyRenderException("No supported device detected!", MyRenderExceptionEnum.GpuNotSupported);
+                    Log.WriteLine("Lowest res fallback.");
+                    var simpleSettings = new MyRenderDeviceSettings()
+                    {
+                        AdapterOrdinal = 0,
+                        BackBufferHeight = 480,
+                        BackBufferWidth = 640,
+                        WindowMode = MyWindowModeEnum.Window,
+                        VSync = true,
+                    };
+                    deviceCreated = CreateDeviceInternalSafe(windowHandle, simpleSettings, out exceptionEnum);
                 }
             }
+#else
+#if !XB1_SKIPASSERTFORNOW
+            System.Diagnostics.Debug.Assert(false, "simpleSettings is initialized but not used?");
+#endif // !XB1_SKIPASSERTFORNOW
+            Log.WriteLine("XB1 res fallback.");
+            var simpleSettings = CreateXB1Settings();
+#endif
 
+
+            if (!deviceCreated)
+            {
+                if (exceptionEnum == MyRenderExceptionEnum.GpuNotSupported)
+                {
+#if !XB1
+                    VRage.Utils.MyMessageBox.Show("Unsupported graphics card",
+                        "Graphics card is not supported, please see minimum requirements");
+#else // XB1
+                    System.Diagnostics.Debug.Assert(false, "Unsupported graphics card");
+#endif // XB1
+                    throw new MyRenderException("No supported device detected!", MyRenderExceptionEnum.GpuNotSupported);
+                }
+                else
+                {
+#if !XB1
+                    VRage.Utils.MyMessageBox.Show("Unspecified graphics error",
+                        "Graphics error occurred, please follow troubleshooting on the game webpages");
+#else // XB1
+                    System.Diagnostics.Debug.Assert(false, "Unspecified graphics error");
+#endif // XB1
+                    throw new MyRenderException("Unspecified error in renderer!", MyRenderExceptionEnum.Unassigned);                    
+                }
+            }
             return m_settings;
         }
 
-        private static bool CreateDeviceInternalSafe(IntPtr windowHandle, MyRenderDeviceSettings? settingsToTry)
+        private static bool CreateDeviceInternalSafe(IntPtr windowHandle, MyRenderDeviceSettings? settingsToTry, out MyRenderExceptionEnum exceptionType)
         {
+            exceptionType = MyRenderExceptionEnum.Unassigned;
+            string errorDesc = "No details";
+
             try
             {
                 CreateDeviceInternal(windowHandle, settingsToTry);
                 return true;
             }
+            catch (MyRenderException ex)
+            {
+                errorDesc = ex.Message;
+                exceptionType = ex.Type;
+            }
             catch (Exception ex)
             {
-                Log.WriteLine("CreateDevice failed: " + ex.ToString());
-                DisposeDevice();
+                errorDesc = ex.Message;
             }
+
+            Log.WriteLine("CreateDevice failed: " + errorDesc);
+            DisposeDevice();
             return false;
         }
 
@@ -204,10 +284,12 @@ namespace VRageRender
                 Device.Dispose();
                 Device = null;
             }
+            WIC = null;
 
             if (settingsToTry != null)
             {
                 Log.WriteLine("CreateDevice - original settings");
+                Log.IncreaseIndent();
                 var originalSettings = settingsToTry.Value;
                 LogSettings(ref originalSettings);
             }
@@ -220,6 +302,7 @@ namespace VRageRender
                 flags |= DeviceCreationFlags.Debug;
 #endif
 
+#if !XB1
             WinApi.DEVMODE mode = new WinApi.DEVMODE();
             WinApi.EnumDisplaySettings(null, WinApi.ENUM_REGISTRY_SETTINGS, ref mode);
 
@@ -232,6 +315,9 @@ namespace VRageRender
                 RefreshRate = 60000,
                 VSync = false,
             };
+#else
+            var settings = CreateXB1Settings();
+#endif
             settings.AdapterOrdinal = ValidateAdapterIndex(settings.AdapterOrdinal);
 
             if (settings.AdapterOrdinal == -1)
@@ -242,6 +328,7 @@ namespace VRageRender
             m_settings = settings;
 
             Log.WriteLine("CreateDevice settings");
+            Log.IncreaseIndent();
             LogSettings(ref m_settings);
 
             // If this line crashes cmd this: Dism /online /add-capability /capabilityname:Tools.Graphics.DirectX~~~~0.0.1.0
@@ -254,6 +341,7 @@ namespace VRageRender
             var adapter = GetFactory().Adapters[adapterId];
             TweakSettingsAdapterAdHoc(adapter);
             Device = new Device(adapter, flags, FeatureLevel.Level_11_0);
+            WIC = new ImagingFactory();
 
             // HACK: This is required for Steam overlay to work. Apparently they hook only CreateDevice methods with DriverType argument.
             try
@@ -264,13 +352,14 @@ namespace VRageRender
 
             InitDebugOutput();
 
-            if(DeviceContext != null)
+            if(RC != null)
             {
-                DeviceContext.Dispose();
-                DeviceContext = null;
+                RC.Dispose();
+                RC = null;
             }
 
-            DeviceContext = Device.ImmediateContext;
+            RC = new MyRenderContext();
+            RC.Initialize(Device.ImmediateContext);
 
             m_windowHandle = windowHandle;
 
@@ -284,6 +373,7 @@ namespace VRageRender
 
             if (!m_initialized)
             {
+                OnDeviceReset();
                 InitSubsystems();
                 m_initialized = true;
             }
@@ -331,12 +421,7 @@ namespace VRageRender
 
         private static void TweakSettingsAdapterAdHoc(Adapter adapter)
         {
-            // Workaround for some AMD/ATI cards that manifest a dirty texture
-            // when blurring for the highlight, showing for example blue grass on ME
-            if (adapter.Description.VendorId == 0x1002)
-                Settings.BlurCopyOnDepthStencilFail = true;
-            else
-                Settings.BlurCopyOnDepthStencilFail = false;
+            // Vendor/device specific workarounds here
         }
 
         internal static void DisposeDevice()
@@ -365,10 +450,10 @@ namespace VRageRender
                 m_swapchain = null;
             }
 
-            if (DeviceContext != null)
+            if (RC != null)
             {
-                DeviceContext.Dispose();
-                DeviceContext = null;
+                RC.Dispose();
+                RC = null;
             }
 
             if (Device != null)
@@ -384,6 +469,7 @@ namespace VRageRender
 
                 Device.Dispose();
                 Device = null;
+                WIC = null;
             }
 
             if(m_factory != null)

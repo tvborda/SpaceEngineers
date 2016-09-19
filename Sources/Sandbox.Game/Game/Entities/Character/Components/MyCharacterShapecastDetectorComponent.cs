@@ -75,30 +75,79 @@ namespace Sandbox.Game.Entities.Character
             DoDetection(!Character.TargetFromCamera, true);
         }
 
+        private Vector3D m_rayOrigin = Vector3D.Zero;
+        private Vector3D m_rayDirection = Vector3D.Zero;
+
+        private int CompareHits(MyPhysics.HitInfo info1, MyPhysics.HitInfo info2)
+        {
+            IMyEntity entity1 = info1.HkHitInfo.GetHitEntity();
+            IMyEntity entity2 = info2.HkHitInfo.GetHitEntity();
+
+            Type entity1Type = entity1.GetType();
+            Type entity2Type = entity2.GetType();
+            if (entity1Type != entity2Type)
+            {
+                // Fix highlighting order on legacy worlds
+                Type voxelMapType = typeof(MyVoxelMap);
+                if (entity1Type == voxelMapType)
+                    return 1;
+                if (entity2Type == voxelMapType)
+                    return -1;
+
+                // Fix highlighting order on planets
+                Type voxelPhysicsType = typeof(MyVoxelPhysics);
+                if (entity1Type == voxelPhysicsType)
+                    return 1;
+                if (entity2Type == voxelPhysicsType)
+                    return -1;
+
+                Type cubeGridType = typeof(MyCubeGrid);
+                if (entity1Type == cubeGridType)
+                    return 1;
+                if (entity2Type == cubeGridType)
+                    return -1;
+                
+            }
+
+            Vector3D deltaPos1 = info1.Position - m_rayOrigin;
+            Vector3D deltaPos2 = info2.Position - m_rayOrigin;
+
+            float dot1 = Vector3.Dot(m_rayDirection, Vector3.Normalize(deltaPos1));
+            float dot2 = Vector3.Dot(m_rayDirection, Vector3.Normalize(deltaPos2));
+            int dotResult = dot2.CompareTo(dot1);
+            if (dotResult != 0) return dotResult;
+
+            int distanceCheck = deltaPos2.LengthSquared().CompareTo(deltaPos1.LengthSquared());
+            if (distanceCheck != 0) return distanceCheck;
+
+            return 0;
+        }
+
         private void DoDetection(bool useHead, bool doModelIntersection)
         {
             if (Character == MySession.Static.ControlledEntity)
                 MyHud.SelectedObjectHighlight.RemoveHighlight();
 
             var head = Character.GetHeadMatrix(false);
-            var headPos = head.Translation - (Vector3D)head.Forward * 0.3; // Move to center of head, we don't want eyes (in front of head)
-
-            Vector3D from;
-            Vector3D dir;
+            Vector3D from = head.Translation;
+            Vector3D dir = head.Forward;
 
             if (!useHead)
             {
-                //Ondrej version
-                //var cameraMatrix = MySector.MainCamera.WorldMatrix;
-                var cameraMatrix = Character.Get3rdBoneMatrix(true, true);
-                dir = cameraMatrix.Forward;
-                from = MyUtils.LinePlaneIntersection(headPos, (Vector3)dir, cameraMatrix.Translation, (Vector3)dir);
-            }
-            else
-            {
-                //Petr version
-                dir = head.Forward;
-                from = headPos;
+                var headPos = head.Translation - (Vector3D)head.Forward * 0.3; // Move to center of head, we don't want eyes (in front of head)
+
+                if (Character == MySession.Static.LocalCharacter)
+                {
+                    from = MySector.MainCamera.WorldMatrix.Translation;
+                    dir = MySector.MainCamera.WorldMatrix.Forward;
+
+                    from = MyUtils.LinePlaneIntersection(headPos, (Vector3)dir, from, (Vector3)dir);
+                }
+                else
+                {
+                    from = headPos;
+                    dir = head.Forward;
+                }
             }
 
             Vector3D to = from + dir * 2.5;//MyConstants.DEFAULT_INTERACTIVE_DISTANCE;
@@ -112,7 +161,10 @@ namespace Sandbox.Game.Entities.Character
             HitPosition = Vector3D.Zero;
             HitNormal = Vector3.Zero;
             HitMaterial = MyStringHash.NullOrEmpty;
+            HitTag = null;
             m_hits.Clear();
+
+            Vector3 interactivePosition = Vector3D.Zero;
 
             try
             {
@@ -120,27 +172,53 @@ namespace Sandbox.Game.Entities.Character
 
                 MyPhysics.CastShapeReturnContactBodyDatas(to, shape, ref matrix, 0, 0f, m_hits);
 
+                m_rayOrigin = from;
+                m_rayDirection = dir;
+                m_hits.Sort(CompareHits);
+                
                 if (m_hits.Count > 0)
                 {
-
-                    int index = 0;
-
                     bool isValidBlock = false;
                     bool isPhysicalBlock = false;
 
-                    do
+                    for (int index = 0; index < m_hits.Count; index++)
                     {
-                        IMyEntity entity = null;
                         HkRigidBody body = m_hits[index].HkHitInfo.Body;
-                        isValidBlock = body != null && (entity = m_hits[index].HkHitInfo.GetHitEntity()) != null
-                            && entity != Character && !body.HasProperty(HkCharacterRigidBody.MANIPULATED_OBJECT);
+                        IMyEntity entity = m_hits[index].HkHitInfo.GetHitEntity();
 
+                        // Ignore self-interaction
+                        if (entity == Character) continue;
+
+                        if (entity is VRage.Game.Entity.MyEntitySubpart)
+                        {
+                            entity = entity.Parent;
+                        }
+
+                        isValidBlock = body != null && entity != null && entity != Character && !body.HasProperty(HkCharacterRigidBody.MANIPULATED_OBJECT);
                         isPhysicalBlock = entity != null && entity.Physics != null;
 
                         if (hitEntity == null && isValidBlock)
                         {
                             hitEntity = entity;
                             ShapeKey = m_hits[index].HkHitInfo.GetShapeKey(0);
+                        }
+
+                        // If hit-entity is a grid, raycast it to see which block we hit first
+                        if (entity is MyCubeGrid)
+                        {
+                            MyCubeGrid grid = entity as MyCubeGrid;
+                            List<MyCube> cubeList = grid.RayCastBlocksAllOrdered(from, to);
+                            if (cubeList != null && cubeList.Count > 0)
+                            {
+                                var slimblock = cubeList[0].CubeBlock;
+                                if (slimblock.FatBlock != null)
+                                {
+                                    entity = slimblock.FatBlock;
+                                    isPhysicalBlock = true;
+                                    hitEntity = entity;
+                                    ShapeKey = 0;
+                                }
+                            }
                         }
 
                         // Set hit material etc. only for object's that have physical representation in the world, this exclude detectors
@@ -150,11 +228,18 @@ namespace Sandbox.Game.Entities.Character
                             HitNormal = m_hits[index].HkHitInfo.Normal;
                             HitPosition = m_hits[index].GetFixedPosition();
                             HitMaterial = body.GetBody().GetMaterialAt(HitPosition);
+
+                            interactivePosition = HitPosition;
+                            break;
+                        }
+                        else if (body != null)
+                        {
+                            interactivePosition = m_hits[index].GetFixedPosition();
+                            break;
                         }
 
                         index++;
-
-                    } while (index < m_hits.Count && (!isValidBlock || !isPhysicalBlock));
+                    }
                 }
             }
             finally
@@ -179,17 +264,26 @@ namespace Sandbox.Game.Entities.Character
                 // Do accurate collision checking on model
                 if (doModelIntersection)
                 {
-                    var grid = hitEntity as MyCubeGrid;
-                    if (grid != null)
+                    LineD line = new LineD(from, to);
+                    var character = hitEntity as MyCharacter;
+                    if (character == null)
                     {
-                        LineD line = new LineD(from, to);
-
                         MyIntersectionResultLineTriangleEx? result;
-                        bool success = grid.GetIntersectionWithLine(ref line, out result);
+                        bool success = hitEntity.GetIntersectionWithLine(ref line, out result, IntersectionFlags.ALL_TRIANGLES);
                         if (success)
                         {
                             HitPosition = result.Value.IntersectionPointInWorldSpace;
                             HitNormal = result.Value.NormalInWorldSpace;
+                        }
+                    }
+                    else
+                    {
+                        bool success = character.GetIntersectionWithLine(ref line, ref CharHitInfo);
+                        if (success)
+                        {
+                            HitPosition = CharHitInfo.Triangle.IntersectionPointInWorldSpace;
+                            HitNormal = CharHitInfo.Triangle.NormalInWorldSpace;
+                            HitTag = CharHitInfo;
                         }
                     }
                 }
@@ -200,7 +294,7 @@ namespace Sandbox.Game.Entities.Character
                 UseObject.OnSelectionLost();
             }
 
-            if (interactive != null && interactive.SupportedActions != UseActionEnum.None && (Vector3D.Distance(from, HitPosition)) < interactive.InteractiveDistance && Character == MySession.Static.ControlledEntity)
+            if (interactive != null && interactive.SupportedActions != UseActionEnum.None && (Vector3D.Distance(from, interactivePosition)) < interactive.InteractiveDistance && Character == MySession.Static.ControlledEntity)
             {
                 HandleInteractiveObject(interactive);
 

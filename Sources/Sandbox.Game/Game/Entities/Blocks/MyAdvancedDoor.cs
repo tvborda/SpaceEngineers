@@ -23,11 +23,13 @@ using VRage.Network;
 using Sandbox.Engine.Multiplayer;
 using VRage;
 using VRage.Game;
+using VRage.Sync;
+using VRageRender.Import;
 
 namespace Sandbox.Game.Entities
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_AdvancedDoor))]
-    public class MyAdvancedDoor : MyFunctionalBlock, ModAPI.IMyDoor
+    public class MyAdvancedDoor : MyFunctionalBlock, ModAPI.IMyAdvancedDoor
     {
         private const float CLOSED_DISSASEMBLE_RATIO = 3.3f;
 
@@ -68,6 +70,11 @@ namespace Sandbox.Game.Entities
 
         public MyAdvancedDoor()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_open = SyncType.CreateAndAddProp<bool>();
+#endif // XB1
+            CreateTerminalControls();
+
             m_subparts.Clear();
             m_subpartIDs.Clear();
             m_currentOpening.Clear();
@@ -167,8 +174,11 @@ namespace Sandbox.Game.Entities
             }
         }
 
-        static MyAdvancedDoor()
+        static void CreateTerminalControls()
         {
+            if (MyTerminalControlFactory.AreControlsCreated<MyAdvancedDoor>())
+                return;
+
             var open = new MyTerminalControlOnOffSwitch<MyAdvancedDoor>("Open", MySpaceTexts.Blank, on: MySpaceTexts.BlockAction_DoorOpen, off: MySpaceTexts.BlockAction_DoorClosed);
             open.Getter = (x) => x.Open;
             open.Setter = (x, v) => x.SetOpenRequest(v, x.OwnerId);
@@ -298,7 +308,7 @@ namespace Sandbox.Game.Entities
                     if (((MyAdvancedDoorDefinition)BlockDefinition).Subparts[i].PivotPosition == null)
                     {
                         // ...try to get pivot from Model...
-                        VRage.Import.MyModelBone bone = foundPart.Model.Bones.First(b => !b.Name.Contains("Root"));
+                        MyModelBone bone = foundPart.Model.Bones.First(b => !b.Name.Contains("Root"));
 
                         if (bone != null)
                             m_hingePosition.Add(bone.Transform.Translation);
@@ -441,12 +451,11 @@ namespace Sandbox.Game.Entities
             m_emitter[emitterId].PlaySingleSound(cuePair);
         }
 
-        public override void UpdateBeforeSimulation100()
+        public override void UpdateSoundEmitters()
         {
-            base.UpdateBeforeSimulation100();
-
             for (int i = 0; i < m_emitter.Count; i++)
-                m_emitter[i].Update();
+                if(m_emitter[i] != null)
+                    m_emitter[i].Update();
         }
 
         public override void UpdateAfterSimulation()
@@ -726,7 +735,7 @@ namespace Sandbox.Game.Entities
 
             if (relation.IsFriendly())
             {
-                m_open.Value = open;
+                Open = open;
             }
         }
     }

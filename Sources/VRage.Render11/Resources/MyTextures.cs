@@ -96,7 +96,6 @@ namespace VRageRender.Resources
         internal static TexId DebugPinkTexId;
         internal static TexId MissingCubeTexId;
         internal static TexId IntelFallbackCubeTexId;
-        internal static TexId RandomTexId;
 
         internal static void InitOnce()
         {
@@ -148,6 +147,10 @@ namespace VRageRender.Resources
                     return Format.B8G8R8A8_UNorm_SRgb;
                 case Format.B8G8R8X8_UNorm:
                     return Format.B8G8R8X8_UNorm_SRgb;
+                case Format.BC1_UNorm:
+                    return Format.BC1_UNorm_SRgb;
+                case Format.BC2_UNorm:
+                    return Format.BC2_UNorm_SRgb;
                 case Format.BC3_UNorm:
                     return Format.BC3_UNorm_SRgb;
                 case Format.BC7_UNorm:
@@ -166,6 +169,10 @@ namespace VRageRender.Resources
                     return Format.B8G8R8A8_UNorm;
                 case Format.B8G8R8X8_UNorm_SRgb:
                     return Format.B8G8R8X8_UNorm;
+                case Format.BC1_UNorm_SRgb:
+                    return Format.BC1_UNorm;
+                case Format.BC2_UNorm_SRgb:
+                    return Format.BC2_UNorm;
                 case Format.BC3_UNorm_SRgb:
                     return Format.BC3_UNorm;
                 case Format.BC7_UNorm_SRgb:
@@ -184,9 +191,13 @@ namespace VRageRender.Resources
                     return true;
                 case Format.B8G8R8X8_UNorm_SRgb:
                     return true;
-                case Format.BC7_UNorm_SRgb:
+                case Format.BC1_UNorm_SRgb:
+                    return true;
+                case Format.BC2_UNorm_SRgb:
                     return true;
                 case Format.BC3_UNorm_SRgb:
+                    return true;
+                case Format.BC7_UNorm_SRgb:
                     return true;
             }
             return false;
@@ -222,7 +233,7 @@ namespace VRageRender.Resources
                 }
                 catch(Exception e)
                 {
-                    MyRender11.Log.WriteLine("Could not load texture: " + path + ", exception: " + e);
+					MyRender11.Log.WriteLine("Error while loading texture: " + path + ", exception: " + e);
                 }
             }
 
@@ -318,6 +329,8 @@ namespace VRageRender.Resources
                         replacingId = MissingCubeTexId;
                         break;
                 }
+
+				MyRender11.Log.WriteLine("Could not load texture: " + path);
 
                 Views[texId.Index] = Views[replacingId.Index];
                 Textures.Data[texId.Index].Resource = Textures.Data[replacingId.Index].Resource;
@@ -634,34 +647,6 @@ namespace VRageRender.Resources
 
                 MissingAlphamaskTexId = RegisterTexture("MISSING_ALPHAMASK", null, MyTextureEnum.SYSTEM, new Texture2D(MyRender11.Device, desc, databox),
                     new Vector2(2, 1), 1);
-            }
-
-            {
-                var desc = new Texture2DDescription();
-                desc.ArraySize = 1;
-                desc.BindFlags = BindFlags.ShaderResource;
-                desc.Format = SharpDX.DXGI.Format.R32G32B32A32_Float;
-                desc.Height = 1024;
-                desc.Width = 1024;
-                desc.Usage = ResourceUsage.Immutable;
-                desc.MipLevels = 1;
-                desc.SampleDescription.Count = 1;
-                desc.SampleDescription.Quality = 0;
-                float[] values = new float[desc.Width * desc.Height * 3];
-                VRage.Library.Utils.MyRandom random = new VRage.Library.Utils.MyRandom();
-                for (uint i = 0, ctr = 0; i < desc.Width * desc.Height; i++)
-                {
-                    values[ctr++] = random.NextFloat() * 2.0f - 1.0f;
-                    values[ctr++] = random.NextFloat() * 2.0f - 1.0f;
-                    values[ctr++] = random.NextFloat() * 2.0f - 1.0f;
-                }
-
-                fixed (float* dptr = values)
-                {
-                    DataBox[] databox = new DataBox[1] { new DataBox(new IntPtr(dptr), desc.Width, 0) };
-                    RandomTexId = MyTextures.RegisterTexture("Random", null, MyTextureEnum.SYSTEM, new Texture2D(MyRender11.Device, desc, databox),
-                       new Vector2(desc.Width, desc.Height), desc.Height * desc.Width * sizeof(float) * 3);
-                }
             }
         }
 

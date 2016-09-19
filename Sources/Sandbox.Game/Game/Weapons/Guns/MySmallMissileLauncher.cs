@@ -27,7 +27,7 @@ using MyGuiConstants = Sandbox.Graphics.GUI.MyGuiConstants;
 using Sandbox.ModAPI.Interfaces;
 using System.Diagnostics;
 using Sandbox.Game.EntityComponents;
-using Sandbox.ModAPI.Ingame;
+using Sandbox.ModAPI;
 using Sandbox.Game.Localization;
 using VRage.ModAPI;
 using VRage.Utils;
@@ -36,13 +36,27 @@ using VRage.Game.Entity;
 using VRage.Game;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Game.ModAPI.Interfaces;
+using VRage.Sync;
 
 namespace Sandbox.Game.Weapons
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_SmallMissileLauncher))]
-    class MySmallMissileLauncher : MyUserControllableGun, IMyMissileGunObject, IMyInventoryOwner, IMyConveyorEndpointBlock, IMyGunBaseUser, IMySmallMissileLauncher
+    public class MySmallMissileLauncher : MyUserControllableGun, IMyMissileGunObject, IMyInventoryOwner, IMyConveyorEndpointBlock, IMyGunBaseUser, IMySmallMissileLauncher
     {
-        protected int m_lastTimeShoot;        //  When was this gun last time shooting
+        protected int m_shotsLeftInBurst = 0;
+        protected int m_nextShootTime = 0;
+
+        private int m_nextNotificationTime = 0;
+        private MyHudNotification m_reloadNotification = null;
+        protected MyHudNotification ReloadNotification
+        {
+            get
+            {
+                if (m_reloadNotification == null)
+                    m_reloadNotification = new MyHudNotification(MySpaceTexts.MissileLauncherReloadingNotification, m_gunBase.ReloadTime - 250, level: MyNotificationLevel.Important);
+                return m_reloadNotification;
+            }
+        }
 
         MyGunBase m_gunBase;
 
@@ -67,22 +81,36 @@ namespace Sandbox.Game.Weapons
             AddDebugRenderComponent(new Components.MyDebugRenderComponentDrawConveyorEndpoint(m_endpoint));
         }
 
-        static MySmallMissileLauncher()
+        public MySmallMissileLauncher()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_useConveyorSystem = SyncType.CreateAndAddProp<bool>();
+#endif // XB1
+            CreateTerminalControls();
+
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_gunBase = new MyGunBase(SyncType);
+#else // !XB1
+            m_gunBase = new MyGunBase();
+#endif // !XB1
+            m_soundEmitter = new MyEntity3DSoundEmitter(this, true);
+            m_useConveyorSystem.Value = true;
+#if !XB1 // !XB1_SYNC_NOREFLECTION
+            SyncType.Append(m_gunBase);
+#endif // !XB1
+        }
+
+        static void CreateTerminalControls()
+        {
+            if (MyTerminalControlFactory.AreControlsCreated<MySmallMissileLauncher>())
+                return;
+
             var useConveyor = new MyTerminalControlOnOffSwitch<MySmallMissileLauncher>("UseConveyor", MySpaceTexts.Terminal_UseConveyorSystem);
             useConveyor.Getter = (x) => (x).UseConveyorSystem;
             useConveyor.Setter = (x, v) => (x).UseConveyorSystem = v;
             useConveyor.Visible = (x) => x.CubeGrid.GridSizeEnum == MyCubeSize.Large; // Only large missile launchers can use conveyor system
             useConveyor.EnableToggleAction();
             MyTerminalControlFactory.AddControl(useConveyor);
-        }
-
-        public MySmallMissileLauncher()
-        {
-            m_gunBase = new MyGunBase();
-            m_soundEmitter = new MyEntity3DSoundEmitter(this, true);
-            m_useConveyorSystem.Value = true;
-            SyncType.Append(m_gunBase);
         }
 
         //[TerminalValues(MySpaceTexts.SwitchText_On, MySpaceTexts.SwitchText_Off)]
@@ -154,6 +182,7 @@ namespace Sandbox.Game.Weapons
             ResourceSink.Update();
             this.GetInventory().Init(ob.Inventory);
             m_gunBase.Init(ob.GunBase, BlockDefinition, this);
+            m_shotsLeftInBurst = m_gunBase.ShotsInBurst;
 	
 			AddDebugRenderComponent(new Components.MyDebugRenderComponentDrawPowerReciever(ResourceSink, this));
 
@@ -261,14 +290,17 @@ namespace Sandbox.Game.Weapons
 
         public float ShakeAmount { get; protected set; }
 
+        public bool IsControlled { get { return (Controller != null); } }
+        public MyCharacter Controller { get; protected set; }
+
         public void OnControlAcquired(MyCharacter owner)
         {
-
+            Controller = owner;
         }
 
         public void OnControlReleased()
         {
-
+            Controller = null;
         }
 
         public bool EnabledInWorldRules { get { return MySession.Static.WeaponsEnabled; } }
@@ -294,6 +326,8 @@ namespace Sandbox.Game.Weapons
             {
                 ShootMissile();
             }
+
+            UpdateReloadNotification();
 
             m_shoot = false;
             NeedsUpdate &= ~MyEntityUpdateEnum.NONE;
@@ -334,6 +368,12 @@ namespace Sandbox.Game.Weapons
         public MyDefinitionId DefinitionId
         {       
             get { return BlockDefinition.Id; }
+        }
+
+        public void UpdateSoundEmitter()
+        {
+            if (m_soundEmitter != null)
+                m_soundEmitter.Update();
         }
 
         #endregion
@@ -397,9 +437,21 @@ namespace Sandbox.Game.Weapons
                 return false;
             }
 
-            if ((MySandboxGame.TotalGamePlayTimeInMilliseconds - m_lastTimeShoot) < m_gunBase.ShootIntervalInMiliseconds / (CubeGrid.GridSizeEnum == MyCubeSize.Small ? 1 : 4))
+            if (m_nextShootTime > MySandboxGame.TotalGamePlayTimeInMilliseconds)
             {
                 status = MyGunStatusEnum.Cooldown;
+                return false;
+            }
+
+            /*if ((MySandboxGame.TotalGamePlayTimeInMilliseconds - m_lastTimeShoot) < m_gunBase.ShootIntervalInMiliseconds / (CubeGrid.GridSizeEnum == MyCubeSize.Small ? 1 : 4))
+            {
+                status = MyGunStatusEnum.Cooldown;
+                return false;
+            }*/
+
+            if (m_shotsLeftInBurst == 0 && m_gunBase.ShotsInBurst > 0)
+            {
+                status = MyGunStatusEnum.Failed;
                 return false;
             }
 
@@ -435,8 +487,18 @@ namespace Sandbox.Game.Weapons
         {         
             m_shoot = true;
             m_shootDirection = direction;
-            m_lastTimeShoot = MySandboxGame.TotalGamePlayTimeInMilliseconds;
             m_gunBase.ConsumeAmmo();
+
+            m_nextShootTime = MySandboxGame.TotalGamePlayTimeInMilliseconds + m_gunBase.ShootIntervalInMiliseconds;
+            if (m_gunBase.ShotsInBurst > 0)
+            {
+                m_shotsLeftInBurst--;
+                if (m_shotsLeftInBurst <= 0)
+                {
+                    m_nextShootTime = MySandboxGame.TotalGamePlayTimeInMilliseconds + m_gunBase.ReloadTime;
+                    m_shotsLeftInBurst = m_gunBase.ShotsInBurst;
+                }
+            }
 
             NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
         }
@@ -448,7 +510,7 @@ namespace Sandbox.Game.Weapons
         {
             get
             {
-                return (MySandboxGame.TotalGamePlayTimeInMilliseconds - m_lastTimeShoot) < m_gunBase.ShootIntervalInMiliseconds;
+                return (m_nextShootTime > MySandboxGame.TotalGamePlayTimeInMilliseconds);
             }
         }
 
@@ -520,6 +582,68 @@ namespace Sandbox.Game.Weapons
             m_gunBase.WorldMatrix = WorldMatrix;
         }
 
+        private void UpdateReloadNotification()
+        {
+            // Remove expired notification
+            if (MySandboxGame.TotalGamePlayTimeInMilliseconds > m_nextNotificationTime)
+            {
+                m_reloadNotification = null;
+            }
+
+            // Remove notification if we are not being controlled by the local player
+            if (Controller != MySession.Static.LocalCharacter)
+            {
+                // Remove reload notification when not reloading
+                if (m_reloadNotification != null)
+                {
+                    MyHud.Notifications.Remove(m_reloadNotification);
+                    m_reloadNotification = null;
+                }
+
+                return;
+            }
+
+            // Wait shot interval time
+            if (m_nextShootTime > MySandboxGame.TotalGamePlayTimeInMilliseconds && (m_nextShootTime - MySandboxGame.TotalGamePlayTimeInMilliseconds) > m_gunBase.ShootIntervalInMiliseconds)
+            {
+                ShowReloadNotification(m_nextShootTime - MySandboxGame.TotalGamePlayTimeInMilliseconds);
+                return;
+            }
+        }
+
+        /// <summary>
+        /// Will show the reload notification for the specified duration.
+        /// </summary>
+        /// <param name="duration">The time in MS it should show reloading.</param>
+        private void ShowReloadNotification(int duration)
+        {
+            int desiredEndTime = MySandboxGame.TotalGamePlayTimeInMilliseconds + duration;
+
+            if (m_reloadNotification == null)
+            {
+                // Removing 250ms to remove overlap in notification display.
+                duration = System.Math.Max(0, duration - 250);
+                if (duration == 0)
+                {
+                    // No notification
+                    return;
+                }
+
+                m_reloadNotification = new MyHudNotification(MySpaceTexts.LargeMissileTurretReloadingNotification, duration, level: MyNotificationLevel.Important);
+                MyHud.Notifications.Add(m_reloadNotification);
+
+                m_nextNotificationTime = desiredEndTime;
+            }
+            else
+            {
+                // Append with extra time
+                int extraTime = desiredEndTime - m_nextNotificationTime;
+                m_reloadNotification.AddAliveTime(extraTime);
+
+                m_nextNotificationTime = desiredEndTime;
+            }
+        }
+
         #region IMyGunBaseUser
 
         MyEntity IMyGunBaseUser.IgnoreEntity
@@ -547,6 +671,16 @@ namespace Sandbox.Game.Weapons
             get { return this.GetInventory(); }
         }
 
+        MyDefinitionId IMyGunBaseUser.PhysicalItemId
+        {
+            get { return new MyDefinitionId(); }
+        }
+
+        MyInventory IMyGunBaseUser.WeaponInventory
+        {
+            get { return null; }
+        }
+
         long IMyGunBaseUser.OwnerId
         {
             get { return this.OwnerId; }
@@ -559,7 +693,7 @@ namespace Sandbox.Game.Weapons
 
         #endregion
 
-        bool IMySmallMissileLauncher.UseConveyorSystem { get { return m_useConveyorSystem; } }
+        bool ModAPI.Ingame.IMySmallMissileLauncher.UseConveyorSystem { get { return m_useConveyorSystem; } }
 
         public override bool CanOperate()
         {

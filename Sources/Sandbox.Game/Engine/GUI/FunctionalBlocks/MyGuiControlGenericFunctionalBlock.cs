@@ -22,6 +22,7 @@ using VRage.Library.Utils;
 using Sandbox.Game.SessionComponents;
 using Sandbox.Game.Entities.Blocks;
 using VRage.Game;
+using VRage.Profiler;
 
 namespace Sandbox.Graphics.GUI
 {
@@ -118,7 +119,7 @@ namespace Sandbox.Graphics.GUI
                     MyGuiControlButtonStyleEnum.Tiny,
                     new Vector2(0.1f, 0.1f),
                     null, MyGuiDrawAlignEnum.HORISONTAL_RIGHT_AND_VERTICAL_CENTER, MyTexts.GetString(MyCommonTexts.AddNewNPC), new StringBuilder("+"),
-                    MyGuiConstants.DEFAULT_TEXT_SCALE, MyGuiDrawAlignEnum.HORISONTAL_CENTER_AND_VERTICAL_CENTER, MyGuiControlHighlightType.WHEN_ACTIVE, true,
+                    MyGuiConstants.DEFAULT_TEXT_SCALE, MyGuiDrawAlignEnum.HORISONTAL_CENTER_AND_VERTICAL_CENTER, MyGuiControlHighlightType.WHEN_ACTIVE,
                     OnNewNpcClick, GuiSounds.MouseClick, 0.75f);
                 Elements.Add(m_npcButton);
             }
@@ -165,7 +166,7 @@ namespace Sandbox.Graphics.GUI
 
             if (m_currentBlocks.Length > 0)
             {
-                m_currentBlocks[0].PropertiesChanged += block_PropertiesChanged;
+                m_currentBlocks[0].PropertiesChanged -= block_PropertiesChanged;
             }
 
             foreach (var block in m_currentBlocks)
@@ -239,7 +240,7 @@ namespace Sandbox.Graphics.GUI
                 foreach (var block in m_currentBlocks)
                 {
                     var type = block.GetType();
-                    foreach (var control in MyTerminalControlFactory.GetControls(block.GetType()))
+                    foreach(var control in MyTerminalControls.Static.GetControls(block))
                     {
                         int num;
                         m_tmpControlDictionary.TryGetValue(control, out num);

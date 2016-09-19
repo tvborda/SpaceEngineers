@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Xml;
-using VRage.Animations;
+using VRageRender.Animations;
 using VRageMath;
 
 namespace VRage.Game
@@ -36,5 +36,8 @@ namespace VRage.Game
 
         bool IsDirty { get; }
         void SetDirty();
+
+        void Draw(List<VRageRender.MyBillboard> collectedBillboards);
+        void PrepareForDraw(ref VRageRender.MyBillboard effectBillboard);
     }
 }

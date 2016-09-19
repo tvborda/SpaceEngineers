@@ -26,13 +26,14 @@ using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.Library.Utils;
 using Sandbox.Game.Audio;
+using Sandbox.ModAPI.Weapons;
 
 #endregion
 
 namespace Sandbox.Game.Weapons
 {
     [MyEntityType(typeof(MyObjectBuilder_AngleGrinder))]
-    class MyAngleGrinder : MyEngineerToolBase
+    public class MyAngleGrinder : MyEngineerToolBase, IMyAngleGrinder
     {
         private MySoundPair m_idleSound = new MySoundPair("ToolPlayGrindIdle");
         private MySoundPair m_actualSound = new MySoundPair("ToolPlayGrindMetal");
@@ -49,7 +50,7 @@ namespace Sandbox.Game.Weapons
         int m_lastUpdateTime;
         float m_rotationSpeed;
 
-        MyDefinitionId m_physicalItemId = new MyDefinitionId(typeof(MyObjectBuilder_PhysicalGunObject), "AngleGrinderItem");
+        static MyDefinitionId m_physicalItemId = new MyDefinitionId(typeof(MyObjectBuilder_PhysicalGunObject), "AngleGrinderItem");
         private float m_grinderCameraMaxShakeIntensity = 1.5f;
         private double m_grinderCameraMeanShakeIntensity = 1.0f;
 

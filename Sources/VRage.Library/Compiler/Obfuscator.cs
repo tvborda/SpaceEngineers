@@ -2,25 +2,20 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-#if BLIT
-using System.Diagnostics;
-#endif
-
-#if true //!BLITCREMENTAL
 
 namespace System.Reflection
 {
-#if BLIT
+#if UNSHARPER
 	[Unsharper.UnsharperDisableReflection()]
 #endif
 	public static class Obfuscator
     {
 		public const string NoRename = "cw symbol renaming";
 		public static readonly bool EnableAttributeCheck = true;
-#if BLIT
+#if XB1
 		public static bool CheckAttribute(this MemberInfo member)
 		{
-			Debug.Assert(false);
+            System.Diagnostics.Debug.Assert(false);
 			return false;
 		}
 #else
@@ -41,5 +36,3 @@ namespace System.Reflection
 #endif
     }
 }
-
-#endif

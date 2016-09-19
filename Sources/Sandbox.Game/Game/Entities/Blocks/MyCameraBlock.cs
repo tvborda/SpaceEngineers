@@ -10,7 +10,7 @@ using Sandbox.Game.Localization;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.Screens.Terminal.Controls;
 using Sandbox.Game.World;
-using Sandbox.ModAPI.Ingame;
+using Sandbox.ModAPI;
 using Sandbox.ModAPI.Interfaces;
 using SteamSDK;
 using System;
@@ -26,6 +26,7 @@ using VRageMath;
 using VRage.Game.Components;
 using VRage.Game.ModAPI.Interfaces;
 using VRage.Game.Utils;
+using VRage.Sync;
 
 namespace Sandbox.Game.Entities
 {
@@ -52,13 +53,27 @@ namespace Sandbox.Game.Entities
         }
         public bool ForceFirstPersonCamera { get; set; }
 
-        private static readonly MyHudNotification m_hudNotification;
+        private static MyHudNotification m_hudNotification;
         private bool m_requestActivateAfterLoad = false;
+        private IMyCameraController m_previousCameraController = null;
 
         readonly Sync<float> m_syncFov;
 
-        static MyCameraBlock()
+        public MyCameraBlock()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_syncFov = SyncType.CreateAndAddProp<float>();
+#endif // XB1
+            CreateTerminalControls();
+
+            m_syncFov.ValueChanged += (x) => OnSyncFov();
+        }
+
+        static void CreateTerminalControls()
+        {
+            if (MyTerminalControlFactory.AreControlsCreated<MyCameraBlock>())
+                return;
+
             var viewBtn = new MyTerminalControlButton<MyCameraBlock>("View", MySpaceTexts.BlockActionTitle_View, MySpaceTexts.Blank, (b) => b.RequestSetView());
             viewBtn.Enabled = (b) => b.CanUse();
             viewBtn.SupportsMultipleBlocks = false;
@@ -73,11 +88,6 @@ namespace Sandbox.Game.Entities
             var controlName = MyInput.Static.GetGameControl(MyControlsSpace.USE).GetControlButtonName(MyGuiInputDeviceEnum.Keyboard);
             m_hudNotification = new MyHudNotification(MySpaceTexts.NotificationHintPressToExitCamera);
             m_hudNotification.SetTextFormatArguments(controlName);
-        }
-
-        public MyCameraBlock()
-        {
-            m_syncFov.ValueChanged += (x) => OnSyncFov();
         }
 
         public bool CanUse()
@@ -335,6 +345,9 @@ namespace Sandbox.Game.Entities
 
         void IMyCameraController.OnAssumeControl(IMyCameraController previousCameraController)
         {
+            if (!(previousCameraController is MyCameraBlock))
+                MyGridCameraSystem.PreviousNonCameraBlockController = previousCameraController;
+
             OnAssumeControl(previousCameraController);
         }
 

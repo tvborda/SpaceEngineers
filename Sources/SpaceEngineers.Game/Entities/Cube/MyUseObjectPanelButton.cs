@@ -14,6 +14,7 @@ using VRage.Input;
 using VRage.ModAPI;
 using VRage.Utils;
 using VRageMath;
+using VRageRender.Import;
 
 namespace SpaceEngineers.Game.Entities.Cube
 {
@@ -64,6 +65,11 @@ namespace SpaceEngineers.Game.Entities.Cube
             {
                 return m_buttonPanel.Render.GetRenderObjectID();
             }
+        }
+
+        public override int InstanceID
+        {
+            get { return -1; }
         }
 
         public override bool ShowOverlay

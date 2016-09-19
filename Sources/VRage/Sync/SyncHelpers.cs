@@ -1,18 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Diagnostics;
-using System.Linq.Expressions;
+using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
-using System.Security;
-using System.Security.Permissions;
 using VRage.Serialization;
 
-namespace VRage.Library.Sync
+namespace VRage.Sync
 {
-#if BLIT
+#if !XB1 // !XB1_SYNC_NOREFLECTION
+#if UNSHARPER
 	public static class SyncHelpers
 	{
         public static SyncType Compose(object obj, int firstId = 0)
@@ -91,4 +88,9 @@ namespace VRage.Library.Sync
         }
     }
 #endif
+#else // XB1
+    public static class SyncHelpers
+    {
+    }
+#endif // XB1
 }

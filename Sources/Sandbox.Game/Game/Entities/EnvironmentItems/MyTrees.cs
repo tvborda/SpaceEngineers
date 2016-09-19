@@ -28,6 +28,11 @@ using VRage.Game.Entity;
 using VRage.Game;
 using VRage.Network;
 using Sandbox.Engine.Multiplayer;
+using VRage.ObjectBuilders.Definitions;
+using VRage.Game.ModAPI.Interfaces;
+using VRage.Game.ModAPI;
+using VRage.Profiler;
+using VRageRender;
 
 namespace Sandbox.Game.Entities.EnvironmentItems
 {
@@ -37,7 +42,7 @@ namespace Sandbox.Game.Entities.EnvironmentItems
     [MyEntityType(typeof(MyObjectBuilder_TreesMedium), mainBuilder: false)]
     [MyEntityType(typeof(MyObjectBuilder_Trees), mainBuilder: true)]
     [StaticEventOwner]
-    public class MyTrees : MyEnvironmentItems
+    public class MyTrees : MyEnvironmentItems, IMyDecalProxy
     {
         private struct MyCutTreeInfo
         {
@@ -69,7 +74,6 @@ namespace Sandbox.Game.Entities.EnvironmentItems
                 if (MyParticlesManager.TryCreateParticleEffect(effectId, out effect))
                 {
                     effect.WorldMatrix = MatrixD.CreateWorld(position, Vector3.CalculatePerpendicularVector(normal), normal);
-                    effect.AutoDelete = true;
                 }
             }
 
@@ -117,12 +121,13 @@ namespace Sandbox.Game.Entities.EnvironmentItems
             return;
         }
 
-		public static bool IsEntityFracturedTree(VRage.ModAPI.IMyEntity entity)
-		{
-			return (entity is MyFracturedPiece) && ((MyFracturedPiece)entity).OriginalBlocks != null && ((MyFracturedPiece)entity).OriginalBlocks.Count > 0
-				&& (((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_Tree)
-				|| ((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_DestroyableItem)) && ((MyFracturedPiece)entity).Physics != null;
-		}
+        public static bool IsEntityFracturedTree(VRage.ModAPI.IMyEntity entity)
+        {
+            return (entity is MyFracturedPiece) && ((MyFracturedPiece)entity).OriginalBlocks != null && ((MyFracturedPiece)entity).OriginalBlocks.Count > 0
+                && (((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_Tree)
+                || ((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_DestroyableItem)
+                || ((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_TreeDefinition)) && ((MyFracturedPiece)entity).Physics != null;
+        }
 
         protected override void OnRemoveItem(int instanceId, ref Matrix matrix, MyStringHash myStringId, int userData)
         {
@@ -308,7 +313,7 @@ namespace Sandbox.Game.Entities.EnvironmentItems
             //compound.SetMassRecursively(500);
             //compound.SetStrenghtRecursively(5000, 0.7f);
 
-            var fp = MyDestructionHelper.CreateFracturePiece(compound, MyPhysics.SingleWorld.DestructionWorld, ref worldMatrix, containsFixedChildren, itemDefinition.Id, true);
+            var fp = MyDestructionHelper.CreateFracturePiece(compound, ref worldMatrix, containsFixedChildren, itemDefinition.Id, true);
             if (fp != null && !canContainFixedChildren)
             {
                 ApplyImpulseToTreeFracture(ref worldMatrix, ref hitNormal, shapeList, ref compound, fp, forceMultiplier);
@@ -358,6 +363,17 @@ namespace Sandbox.Game.Entities.EnvironmentItems
                     m_cutTreeInfos.RemoveAtFast(i);
                 }
             }
+        }
+
+        void IMyDecalProxy.AddDecals(MyHitInfo hitInfo, MyStringHash source, object customdata, IMyDecalHandler decalHandler)
+        {
+            MyDecalRenderInfo info = new MyDecalRenderInfo();
+            info.Position = hitInfo.Position;
+            info.Normal = hitInfo.Normal;
+            info.RenderObjectId = -1;
+            info.Flags = MyDecalFlags.World;
+            info.Material = Physics.MaterialType;
+            decalHandler.AddDecal(ref info);
         }
     }
 }

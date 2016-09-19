@@ -12,6 +12,7 @@ using VRage.Import;
 using VRage.Input;
 using VRage.ModAPI;
 using VRageMath;
+using VRageRender.Import;
 
 namespace SpaceEngineers.Game.Entities.UseObjects
 {
@@ -49,6 +50,11 @@ namespace SpaceEngineers.Game.Entities.UseObjects
             {
                 return Block.Render.GetRenderObjectID();
             }
+        }
+
+        public override int InstanceID
+        {
+            get { return -1; }
         }
 
         public override bool ShowOverlay

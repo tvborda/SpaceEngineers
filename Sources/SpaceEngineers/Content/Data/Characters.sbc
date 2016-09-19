@@ -35,6 +35,7 @@
       
       <LootingTime>30</LootingTime>
       <UsesAtmosphereDetector>true</UsesAtmosphereDetector>
+      <UsesReverbDetector>true</UsesReverbDetector>
 
       <!-- CHARACTER CONTROL -->
 		<UseOnlyWalking>false</UseOnlyWalking>
@@ -56,6 +57,7 @@
 		
 		<JumpForce>2.5</JumpForce>
 
+		<CharacterHeadSize>0.4</CharacterHeadSize>
 		<!-- <CharacterHeadSize>0.45</CharacterHeadSize>
 		<CharacterHeadHeight>0.25</CharacterHeadHeight>
 		<CharacterCollisionScale>1.1</CharacterCollisionScale> -->
@@ -82,7 +84,7 @@
       <LightOffset>
         <X>0.0</X>
         <Y>0.25</Y>
-        <Z>-0.9</Z>
+        <Z>0</Z>
       </LightOffset>
 
 
@@ -90,6 +92,8 @@
         <Material>Head</Material>
         <Material>Light</Material>
         <Material>Astronaut_glass</Material>
+        <Material>Astronaut_head</Material>
+        <Material>Spacesuit_hood</Material>
       </MaterialsDisabledIn1st>
       <OxygenConsumption>0.063</OxygenConsumption>
       <OxygenConsumptionMultiplier>1</OxygenConsumptionMultiplier>
@@ -375,11 +379,12 @@
 
       <CrouchDownSoundName>PlayCrouchDwn</CrouchDownSoundName>
       <CrouchUpSoundName>PlayCrouchUp</CrouchUpSoundName>
+      <MovementSoundName></MovementSoundName>
 
       <PainSoundName>PlayVocPain</PainSoundName>
       <SuffocateSoundName>PlayChokeHit</SuffocateSoundName>
       <DeathSoundName>PlayVocDeath</DeathSoundName>
-      <DeathBySuffocationSoundName>RealPlayChokeDeath</DeathBySuffocationSoundName>
+      <DeathBySuffocationSoundName>PlayChokeDeath</DeathBySuffocationSoundName>
 
       <IronsightActSoundName>PlayIronSightActivate</IronsightActSoundName>
       <IronsightDeactSoundName>PlayIronSightDeactivate</IronsightDeactSoundName>

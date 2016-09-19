@@ -16,10 +16,10 @@ using System.Text;
 using VRage;
 using VRage.Collections;
 using VRage.Library.Collections;
-using VRage.Library.Sync;
 using VRage.Network;
 using VRage.Replication;
 using VRage.Serialization;
+using VRage.Sync;
 
 namespace Sandbox.Game.Replication
 {
@@ -166,7 +166,7 @@ namespace Sandbox.Game.Replication
                 return 0;
         }
 
-        public void Serialize(BitStream stream, EndpointId forClient,uint timestamp, byte packetId, int maxBitPosition)
+        public bool Serialize(BitStream stream, EndpointId forClient,uint timestamp, byte packetId, int maxBitPosition)
         {
             SmallBitField dirtyFlags;
             if (stream.Writing)
@@ -196,6 +196,8 @@ namespace Sandbox.Game.Replication
                 data.SentProperties.Bits = data.DirtyProperties.Bits;
                 data.DirtyProperties.Bits = 0;
             }
+
+            return true;
         }
 
         public void OnAck(MyClientStateBase forClient, byte packetId, bool delivered)

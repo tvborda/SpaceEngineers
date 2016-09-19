@@ -80,6 +80,13 @@ namespace VRageMath
             this.Z = z;
         }
 
+        public Vector3D(Vector2D value, double z)
+        {
+            this.X = value.X;
+            this.Y = value.Y;
+            this.Z = z;
+        }
+
         public Vector3D(Vector4 xyz)
         {
             this.X = xyz.X;
@@ -179,6 +186,30 @@ namespace VRageMath
                 return (double)value1.Z != (double)value2.Z;
             else
                 return true;
+        }
+
+        public static Vector3D operator %(Vector3D value1, double value2)
+        {
+            Vector3D vector3;
+            vector3.X = value1.X % value2;
+            vector3.Y = value1.Y % value2;
+            vector3.Z = value1.Z % value2;
+            return vector3;
+        }
+
+        /// <summary>
+        /// Modulo division of two vectors.
+        /// </summary>
+        /// <param name="value1"></param>
+        /// <param name="value2"></param>
+        /// <returns></returns>
+        public static Vector3D operator %(Vector3D value1, Vector3D value2)
+        {
+            Vector3D vector3;
+            vector3.X = value1.X % value2.X;
+            vector3.Y = value1.Y % value2.Y;
+            vector3.Z = value1.Z % value2.Z;
+            return vector3;
         }
 
         /// <summary>
@@ -560,6 +591,11 @@ namespace VRageMath
                 return (double)this.Z == (double)other.Z;
             else
                 return false;
+        }
+
+        public bool Equals(Vector3D other, double epsilon)
+        {
+            return Math.Abs(this.X - other.X) < epsilon && Math.Abs(this.Y - other.Y) < epsilon && Math.Abs(this.Z - other.Z) < epsilon;
         }
 
         /// <summary>
@@ -1035,6 +1071,34 @@ namespace VRageMath
         }
 
         /// <summary>
+        /// Separates minimal and maximal values of any two input vectors
+        /// </summary>
+        /// <param name="min">minimal values of the two vectors</param>
+        /// <param name="max">maximal values of the two vectors</param>
+        public static void MinMax(ref Vector3D min, ref Vector3D max)
+        {
+            double tmp;
+            if (min.X > max.X)
+            {
+                tmp = min.X;
+                min.X = max.X;
+                max.X = tmp;
+            }
+            if (min.Y > max.Y)
+            {
+                tmp = min.Y;
+                min.Y = max.Y;
+                max.Y = tmp;
+            }
+            if (min.Z > max.Z)
+            {
+                tmp = min.Z;
+                min.Z = max.Z;
+                max.Z = tmp;
+            }
+        }
+
+        /// <summary>
         /// Returns a vector that is equal to the projection of the input vector to the coordinate axis that corresponds
         /// to the original vector's largest value.
         /// </summary>
@@ -1197,6 +1261,25 @@ namespace VRageMath
         }
 
         /// <summary>
+        /// Compute barycentric coordinates (u, v, w) for point p with respect to triangle (a, b, c)
+        /// From : Real-Time Collision Detection, Christer Ericson, CRC Press
+        /// 3.4 Barycentric Coordinates
+        /// </summary>
+        public static void Barycentric(Vector3D p, Vector3D a, Vector3D b, Vector3D c, out double u, out double v, out double w)
+        {
+            Vector3D v0 = b - a, v1 = c - a, v2 = p - a;
+            double d00 = Dot(v0, v0);
+            double d01 = Dot(v0, v1);
+            double d11 = Dot(v1, v1);
+            double d20 = Dot(v2, v0);
+            double d21 = Dot(v2, v1);
+            double denom = d00 * d11 - d01 * d01;
+            v = (d11 * d20 - d01 * d21) / denom;
+            w = (d00 * d21 - d01 * d20) / denom;
+            u = 1.0f - v - w;
+        }
+
+        /// <summary>
         /// Interpolates between two values using a cubic equation.
         /// </summary>
         /// <param name="value1">Source value.</param><param name="value2">Source value.</param><param name="amount">Weighting value.</param>
@@ -1354,15 +1437,46 @@ namespace VRageMath
             result.Y = num2 * num4;
             result.Z = num3 * num4;
         }
+
         public static void Transform(ref Vector3 position, ref MatrixD matrix, out Vector3D result)
         {
-            double num1 = (double)((double)position.X * (double)matrix.M11 + (double)position.Y * (double)matrix.M21 + (double)position.Z * (double)matrix.M31) + matrix.M41;
+            double num1 = (double)position.X * (double)matrix.M11 + (double)position.Y * (double)matrix.M21 + (double)position.Z * (double)matrix.M31 + matrix.M41;
             double num2 = (double)((double)position.X * (double)matrix.M12 + (double)position.Y * (double)matrix.M22 + (double)position.Z * (double)matrix.M32) + matrix.M42;
             double num3 = (double)((double)position.X * (double)matrix.M13 + (double)position.Y * (double)matrix.M23 + (double)position.Z * (double)matrix.M33) + matrix.M43;
             double num4 = 1 / ((((position.X * matrix.M14) + (position.Y * matrix.M24)) + (position.Z * matrix.M34)) + matrix.M44);
             result.X = num1 * num4;
             result.Y = num2 * num4;
             result.Z = num3 * num4;
+        }
+
+        /**
+         * Transform the provided vector only about the rotation, scale and translation terms of a matrix.
+         * 
+         * This effectively treats the matrix as a 3x4 matrix and the input vector as a 4 dimensional vector with unit W coordinate.
+         */
+        public static void TransformNoProjection(ref Vector3D vector, ref MatrixD matrix, out Vector3D result)
+        {
+            double x = (vector.X * matrix.M11 + vector.Y * matrix.M21 + vector.Z * matrix.M31) + matrix.M41;
+            double y = (vector.X * matrix.M12 + vector.Y * matrix.M22 + vector.Z * matrix.M32) + matrix.M42;
+            double z = (vector.X * matrix.M13 + vector.Y * matrix.M23 + vector.Z * matrix.M33) + matrix.M43;
+
+            result.X = x;
+            result.Y = y;
+            result.Z = z;
+        }
+
+        /**
+         * Transform the provided vector only about the rotation and scale terms of a matrix.
+         */
+        public static void RotateAndScale(ref Vector3D vector, ref MatrixD matrix, out Vector3D result)
+        {
+            double x = (vector.X * matrix.M11 + vector.Y * matrix.M21 + vector.Z * matrix.M31);
+            double y = (vector.X * matrix.M12 + vector.Y * matrix.M22 + vector.Z * matrix.M32);
+            double z = (vector.X * matrix.M13 + vector.Y * matrix.M23 + vector.Z * matrix.M33);
+
+            result.X = x;
+            result.Y = y;
+            result.Z = z;
         }
 
         public static void Transform(ref Vector3D position, ref MatrixI matrix, out Vector3D result)
@@ -1467,6 +1581,12 @@ namespace VRageMath
                      - normal.Z * new Vector3D(Base6Directions.GetVector(orientation.Forward));
         }
 
+        public static Vector3D TransformNormal(Vector3D normal, ref MatrixD matrix)
+        {
+            TransformNormal(ref normal, ref matrix, out normal);
+            return normal;
+        }
+
         /// <summary>
         /// Transforms a Vector3 by a specified Quaternion rotation.
         /// </summary>
@@ -1529,6 +1649,13 @@ namespace VRageMath
             result.X = num1;
             result.Y = num2;
             result.Z = num3;
+        }
+
+        public static Vector3D Rotate(Vector3D vector, MatrixD rotationMatrix)
+        {
+            Vector3D result;
+            Rotate(ref vector, ref rotationMatrix, out result);
+            return result;
         }
 
         /// <summary>
@@ -2025,6 +2152,13 @@ namespace VRageMath
         public static Vector3D Round(Vector3D v, int numDecimals)
         {
             return new Vector3D(Math.Round(v.X, numDecimals), Math.Round(v.Y, numDecimals), Math.Round(v.Z, numDecimals));
+        }
+
+        public static void Abs(ref Vector3D vector3D, out Vector3D abs)
+        {
+            abs.X = Math.Abs(vector3D.X);
+            abs.Y = Math.Abs(vector3D.Y);
+            abs.Z = Math.Abs(vector3D.Z);
         }
     }
 

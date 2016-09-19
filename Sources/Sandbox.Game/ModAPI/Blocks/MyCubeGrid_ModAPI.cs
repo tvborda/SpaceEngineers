@@ -219,6 +219,11 @@ namespace Sandbox.Game.Entities
             return WorldToGridInteger(coords);
         }
 
+        bool IMyCubeGrid.WillRemoveBlockSplitGrid( IMySlimBlock testBlock )
+        {
+            return WillRemoveBlockSplitGrid( (MySlimBlock)testBlock );
+        }
+
         Action<MySlimBlock> GetDelegate(Action<IMySlimBlock> value)
         {
             return (Action<MySlimBlock>)Delegate.CreateDelegate(typeof(Action<MySlimBlock>), value.Target, value.Method);
@@ -245,6 +250,12 @@ namespace Sandbox.Game.Entities
         {
             add { OnBlockOwnershipChanged += GetDelegate(value); }
             remove { OnBlockOwnershipChanged -= GetDelegate(value); }
+        }
+
+        event Action<IMyCubeGrid> IMyCubeGrid.OnGridChanged
+        {
+            add { OnGridChanged += GetDelegate(value); }
+            remove { OnGridChanged -= GetDelegate(value); }
         }
 
         VRage.Game.ModAPI.Ingame.IMySlimBlock VRage.Game.ModAPI.Ingame.IMyCubeGrid.GetCubeBlock(Vector3I position)

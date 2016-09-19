@@ -14,13 +14,15 @@ using VRageMath;
 using Sandbox.Engine.Utils;
 using Sandbox.Game.Components;
 using Sandbox.Game.EntityComponents;
-using Sandbox.ModAPI.Ingame;
+using Sandbox.ModAPI;
 using Sandbox.Game.Localization;
 using VRage;
 using VRage.Game;
 using VRage.Utils;
 using VRage.ModAPI;
 using VRage.Game.Models;
+using VRage.Profiler;
+using VRage.Sync;
 
 namespace Sandbox.Game.Entities.Blocks
 {
@@ -37,13 +39,14 @@ namespace Sandbox.Game.Entities.Blocks
         private readonly Sync<float> m_intesity;
         private readonly Sync<Color> m_lightColor;
         private readonly Sync<float> m_lightRadius;
-        private readonly Sync<float> m_lightReflectorRadius;
         private readonly Sync<float> m_lightFalloff;
 
         private Vector3D m_lightWorldPosition;
         private Vector3 m_lightLocalPosition;
         private float m_lightTurningOnSpeed = 0.05f;
         private bool m_positionDirty = true;
+
+        MatrixD m_oldWorldMatrix = MatrixD.Zero;
 
         #region Properties
 
@@ -120,30 +123,25 @@ namespace Sandbox.Game.Entities.Blocks
         #endregion
 
         #region Terminal properties
-        static MyLightingBlock()
+        static void CreateTerminalControls()
         {
+            if (MyTerminalControlFactory.AreControlsCreated<MyLightingBlock>())
+                return;
+
             var lightColor = new MyTerminalControlColor<MyLightingBlock>("Color", MySpaceTexts.BlockPropertyTitle_LightColor);
             lightColor.Getter = (x) => x.Color;
             lightColor.Setter = (x, v) => x.m_lightColor.Value = v;
             MyTerminalControlFactory.AddControl(lightColor);
 
             var lightRadius = new MyTerminalControlSlider<MyLightingBlock>("Radius", MySpaceTexts.BlockPropertyTitle_LightRadius, MySpaceTexts.BlockPropertyDescription_LightRadius);
-            lightRadius.SetLimits((x) => x.RadiusBounds.Min, (x) => x.RadiusBounds.Max);
-            lightRadius.DefaultValueGetter = (x) => x.RadiusBounds.Default;
-            lightRadius.Getter = (x) => x.Radius;
+            lightRadius.SetLimits((x) => x.m_light.IsTypeSpot ? x.ReflectorRadiusBounds.Min : x.RadiusBounds.Min,
+                (x) => x.m_light.IsTypeSpot ? x.ReflectorRadiusBounds.Max : x.RadiusBounds.Max);
+            lightRadius.DefaultValueGetter = (x) => x.m_light.IsTypeSpot ? x.ReflectorRadiusBounds.Default : x.RadiusBounds.Default;
+            lightRadius.Getter = (x) => x.m_light.IsTypeSpot ? x.ReflectorRadius : x.Radius;
             lightRadius.Setter = (x, v) => x.m_lightRadius.Value = v;
-            lightRadius.Writer = (x, result) => result.Append(MyValueFormatter.GetFormatedFloat(x.m_light.Range, 1)).Append(" m");
+            lightRadius.Writer = (x, result) => result.Append(MyValueFormatter.GetFormatedFloat(x.m_light.IsTypeSpot ? x.m_light.ReflectorRange : x.m_light.Range, 1)).Append(" m");
             lightRadius.EnableActions();
             MyTerminalControlFactory.AddControl(lightRadius);
-
-            var lightReflectorRadius = new MyTerminalControlSlider<MyLightingBlock>("Reflector Radius", MySpaceTexts.BlockPropertyTitle_LightReflectorRadius, MySpaceTexts.BlockPropertyDescription_LightReflectorRadius);
-            lightReflectorRadius.SetLimits((x) => x.ReflectorRadiusBounds.Min, (x) => x.ReflectorRadiusBounds.Max);
-            lightReflectorRadius.DefaultValueGetter = (x) => x.ReflectorRadiusBounds.Default;
-            lightReflectorRadius.Getter = (x) => x.ReflectorRadius;
-            lightReflectorRadius.Setter = (x, v) => x.m_lightReflectorRadius.Value = v;
-            lightReflectorRadius.Writer = (x, result) => result.Append(MyValueFormatter.GetFormatedFloat(x.m_light.ReflectorRange, 1)).Append(" m");
-            lightReflectorRadius.EnableActions();
-            MyTerminalControlFactory.AddControl(lightReflectorRadius);
 
             var lightFalloff = new MyTerminalControlSlider<MyLightingBlock>("Falloff", MySpaceTexts.BlockPropertyTitle_LightFalloff, MySpaceTexts.BlockPropertyDescription_LightFalloff);
             lightFalloff.SetLimits((x) => x.FalloffBounds.Min, (x) => x.FalloffBounds.Max);
@@ -362,7 +360,8 @@ namespace Sandbox.Game.Entities.Blocks
             m_light.ReflectorOn = false;
             m_light.LightOn = false;
             m_light.GlareOn = false;
-            
+
+            UpdateRadius(m_light.IsTypeSpot ? reflectorRadius : radius);
             UpdateIntensity();
             UpdateLightPosition();
 
@@ -404,11 +403,21 @@ namespace Sandbox.Game.Entities.Blocks
 
         public MyLightingBlock()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_blinkIntervalSeconds = SyncType.CreateAndAddProp<float>();
+            m_blinkLength = SyncType.CreateAndAddProp<float>();
+            m_blinkOffset = SyncType.CreateAndAddProp<float>();
+            m_intesity = SyncType.CreateAndAddProp<float>();
+            m_lightColor = SyncType.CreateAndAddProp<Color>();
+            m_lightRadius = SyncType.CreateAndAddProp<float>();
+            m_lightFalloff = SyncType.CreateAndAddProp<float>();
+#endif // XB1
+            CreateTerminalControls();
+
             this.Render = new MyRenderComponentLight();
 
             m_lightColor.ValueChanged += x => LightColorChanged();
             m_lightRadius.ValueChanged += x => LightRadiusChanged();
-            m_lightReflectorRadius.ValueChanged += x => LightReflectorRadiusChanged();
             m_lightFalloff.ValueChanged += x => LightFalloffChanged();
         }
         #endregion
@@ -417,14 +426,18 @@ namespace Sandbox.Game.Entities.Blocks
             Falloff = m_lightFalloff.Value;
         }
 
-        void LightRadiusChanged()
+        virtual protected void UpdateRadius(float value)
         {
-            Radius = m_lightRadius.Value;
+            if (m_light.IsTypeSpot)
+            {
+                ReflectorRadius = value;
+            }
+            else Radius = value;
         }
 
-        void LightReflectorRadiusChanged()
+        private void LightRadiusChanged()
         {
-            ReflectorRadius = m_lightReflectorRadius.Value;
+            UpdateRadius(m_lightRadius.Value);
         }
 
         void LightColorChanged()
@@ -584,6 +597,13 @@ namespace Sandbox.Game.Entities.Blocks
                     m_light.MarkPropertiesDirty();
             }
             oldWorldPosition = worldPosition;
+
+            if (m_oldWorldMatrix.Forward != WorldMatrix.Forward)
+            {
+                if (m_light != null)
+                    m_light.MarkPropertiesDirty();
+            }
+            m_oldWorldMatrix = WorldMatrix;
         }
 
         private void UpdateLightPosition()
@@ -619,11 +639,12 @@ namespace Sandbox.Game.Entities.Blocks
             m_positionDirty = true;
         }
 
-        float IMyLightingBlock.Radius { get { return Radius; } }
-        float IMyLightingBlock.ReflectorRadius { get { return ReflectorRadius; } }
-        float IMyLightingBlock.Intensity { get { return Intensity; } }
-        float IMyLightingBlock.BlinkIntervalSeconds { get { return BlinkIntervalSeconds; } }
-        float IMyLightingBlock.BlinkLenght { get { return BlinkLength;} }
-        float IMyLightingBlock.BlinkOffset { get {return BlinkOffset;} }
+        float ModAPI.Ingame.IMyLightingBlock.Radius { get { return Radius; } }
+        float ModAPI.Ingame.IMyLightingBlock.ReflectorRadius { get { return ReflectorRadius; } }
+        float ModAPI.Ingame.IMyLightingBlock.Intensity { get { return Intensity; } }
+        float ModAPI.Ingame.IMyLightingBlock.BlinkIntervalSeconds { get { return BlinkIntervalSeconds; } }
+        float ModAPI.Ingame.IMyLightingBlock.BlinkLenght { get { return BlinkLength; } }
+        float ModAPI.Ingame.IMyLightingBlock.BlinkLength { get { return BlinkLength; } }
+        float ModAPI.Ingame.IMyLightingBlock.BlinkOffset { get { return BlinkOffset; } }
     }
 }

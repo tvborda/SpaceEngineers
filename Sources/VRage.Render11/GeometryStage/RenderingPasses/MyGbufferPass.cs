@@ -1,11 +1,19 @@
 ﻿using System.Diagnostics;
+using VRage.Import;
+using VRage.Render11.RenderContext;
+using VRage.Render11.Resources;
+using VRageRender.Import;
 using Matrix = VRageMath.Matrix;
 using Vector4 = VRageMath.Vector4;
 
 namespace VRageRender
 {
     [PooledObject]
+#if XB1
+    class MyGBufferPass : MyRenderingPass, IMyPooledObjectCleaner
+#else // !XB1
     class MyGBufferPass : MyRenderingPass
+#endif // !XB1
     {
         internal MyGBuffer GBuffer;
 
@@ -15,12 +23,10 @@ namespace VRageRender
 
             base.Begin();
 
-            RC.BindGBufferForWrite(GBuffer);
-
-            RC.SetDS(MyDepthStencilState.DepthTestWrite);
+            RC.SetRtvs(GBuffer, MyDepthStencilAccess.ReadWrite);
         }
 
-        protected unsafe override sealed void RecordCommandsInternal(MyRenderableProxy proxy, int section)
+        protected unsafe override sealed void RecordCommandsInternal(MyRenderableProxy proxy)
         {
             if ((proxy.Mesh.Buffers.IB == IndexBufferId.NULL && proxy.MergedMesh.Buffers.IB == IndexBufferId.NULL)
                 || proxy.DrawSubmesh.IndexCount == 0
@@ -33,24 +39,59 @@ namespace VRageRender
             BindProxyGeometry(proxy, RC);
 
             Debug.Assert(proxy.Shaders.VS != null);
-            RC.BindShaders(proxy.Shaders);
+            MyRenderUtils.BindShaderBundle(RC, proxy.Shaders);
 
-//#if DEBUG
             if (MyRender11.Settings.Wireframe)
             {
-                if ((proxy.Flags & MyRenderableProxyFlags.DisableFaceCulling) > 0)
-                    RC.SetRS(MyRender11.m_nocullWireframeRasterizerState);
+                SetDepthStencilView(false);
+                RC.SetBlendState(null);
+                if (proxy.Flags.HasFlags(MyRenderableProxyFlags.DisableFaceCulling))
+                    RC.SetRasterizerState(MyRasterizerStateManager.NocullWireframeRasterizerState);
                 else
-                    RC.SetRS(MyRender11.m_wireframeRasterizerState);
+                    RC.SetRasterizerState(MyRasterizerStateManager.WireframeRasterizerState);
             }
             else
             {
-                if ((proxy.Flags & MyRenderableProxyFlags.DisableFaceCulling) > 0)
-                    RC.SetRS(MyRender11.m_nocullRasterizerState);
+                MyMeshDrawTechnique technique = MyMeshDrawTechnique.MESH;
+                if (proxy.Material != MyMeshMaterialId.NULL)
+                    technique = proxy.Material.Info.Technique;
+
+                if (proxy.Flags.HasFlags(MyRenderableProxyFlags.DisableFaceCulling))
+                {
+                    switch (technique)
+                    {
+                        case MyMeshDrawTechnique.DECAL_CUTOUT:
+                        case MyMeshDrawTechnique.DECAL:
+                            SetDepthStencilView(true);
+                            MyMeshMaterials1.BindMaterialTextureBlendStates(RC, proxy.Material.Info.TextureTypes);
+                            RC.SetRasterizerState(MyRasterizerStateManager.NocullDecalRasterizerState);
+                            break;
+                        default:
+                            SetDepthStencilView(false);
+                            RC.SetBlendState(null);
+                            RC.SetRasterizerState(MyRasterizerStateManager.NocullRasterizerState);
+                            break;
+                    }
+                }
                 else
-                    RC.SetRS(null);
+                {
+                    switch (technique)
+                    {
+                        case MyMeshDrawTechnique.DECAL:
+                        case MyMeshDrawTechnique.DECAL_CUTOUT:
+                            SetDepthStencilView(true);
+                            MyMeshMaterials1.BindMaterialTextureBlendStates(RC, proxy.Material.Info.TextureTypes);
+                            RC.SetRasterizerState(MyRasterizerStateManager.DecalRasterizerState);
+                            break;
+                        default:
+                            SetDepthStencilView(false);
+                            RC.SetBlendState(null);
+                            RC.SetRasterizerState(null);
+                            break;
+                    }
+                }
             }
-//#endif
+
             ++Stats.Submeshes;
             var submesh = proxy.DrawSubmesh;
             if (submesh.MaterialId != Locals.matTexturesID)
@@ -59,23 +100,27 @@ namespace VRageRender
 
                 Locals.matTexturesID = submesh.MaterialId;
                 var material = MyMaterials1.ProxyPool.Data[submesh.MaterialId.Index];
-                RC.MoveConstants(ref material.MaterialConstants);
-                RC.SetConstants(ref material.MaterialConstants, MyCommon.MATERIAL_SLOT);
-                RC.SetSRVs(ref material.MaterialSRVs);
+                MyRenderUtils.MoveConstants(RC, ref material.MaterialConstants);
+                MyRenderUtils.SetConstants(RC, ref material.MaterialConstants, MyCommon.MATERIAL_SLOT);
+                MyRenderUtils.SetSrvs(RC, ref material.MaterialSrvs);
             }
 
             if (proxy.InstanceCount == 0) 
             {
-                RC.DeviceContext.DrawIndexed(submesh.IndexCount, submesh.StartIndex, submesh.BaseVertex);
-                ++RC.Stats.DrawIndexed;
+                if (!MyStereoRender.Enable)
+                    RC.DrawIndexed(submesh.IndexCount, submesh.StartIndex, submesh.BaseVertex);
+                else
+                    MyStereoRender.DrawIndexedGBufferPass(RC, submesh.IndexCount, submesh.StartIndex, submesh.BaseVertex);
                 ++Stats.Instances;
                 Stats.Triangles += submesh.IndexCount / 3;
             }
             else
             {
                 //MyRender11.AddDebugQueueMessage("GbufferPass DrawIndexedInstanced " + proxy.Material.ToString());
-                RC.DeviceContext.DrawIndexedInstanced(submesh.IndexCount, proxy.InstanceCount, submesh.StartIndex, submesh.BaseVertex, proxy.StartInstance);
-                ++RC.Stats.DrawIndexedInstanced;
+                if (!MyStereoRender.Enable)
+                    RC.DrawIndexedInstanced(submesh.IndexCount, proxy.InstanceCount, submesh.StartIndex, submesh.BaseVertex, proxy.StartInstance);
+                else
+                    MyStereoRender.DrawIndexedInstancedGBufferPass(RC, submesh.IndexCount, proxy.InstanceCount, submesh.StartIndex, submesh.BaseVertex, proxy.StartInstance);
                 Stats.Instances += proxy.InstanceCount;
                 Stats.Triangles += proxy.InstanceCount * submesh.IndexCount / 3;
             }
@@ -83,12 +128,13 @@ namespace VRageRender
 
         protected override void RecordCommandsInternal(ref MyRenderableProxy_2 proxy, int instanceIndex, int sectionIndex)
         {
-            RC.SetSRVs(ref proxy.ObjectSRVs);
-            RC.BindVertexData(ref proxy.VertexData);
+            MyRenderUtils.SetSrvs(RC, ref proxy.ObjectSrvs);
 
             Debug.Assert(proxy.Shaders.MultiInstance.VS != null);
 
-            RC.BindShaders(proxy.Shaders.MultiInstance);
+            MyRenderUtils.BindShaderBundle(RC, proxy.Shaders.MultiInstance);
+
+            SetDepthStencilView(false);
 
             SetProxyConstants(ref proxy);
 
@@ -96,19 +142,25 @@ namespace VRageRender
             {
                 var submesh = proxy.Submeshes[i];
                 var material = MyMaterials1.ProxyPool.Data[submesh.MaterialId.Index];
-                RC.MoveConstants(ref material.MaterialConstants);
-                RC.SetConstants(ref material.MaterialConstants, MyCommon.MATERIAL_SLOT);
-                RC.SetSRVs(ref material.MaterialSRVs);
+                MyRenderUtils.MoveConstants(RC, ref material.MaterialConstants);
+                MyRenderUtils.SetConstants(RC, ref material.MaterialConstants, MyCommon.MATERIAL_SLOT);
+                MyRenderUtils.SetSrvs(RC, ref material.MaterialSrvs);
 
                 if (proxy.InstanceCount == 0)
                 {
                     switch (submesh.DrawCommand)
                     {
                         case MyDrawCommandEnum.DrawIndexed:
-                            RC.DeviceContext.DrawIndexed(submesh.Count, submesh.Start, submesh.BaseVertex);
+                            if (!MyStereoRender.Enable)
+                                RC.DrawIndexed(submesh.Count, submesh.Start, submesh.BaseVertex);
+                            else
+                                MyStereoRender.DrawIndexedGBufferPass(RC, submesh.Count, submesh.Start, submesh.BaseVertex);
                             break;
                         case MyDrawCommandEnum.Draw:
-                            RC.DeviceContext.Draw(submesh.Count, submesh.Start);
+                            if (!MyStereoRender.Enable)
+                                RC.Draw(submesh.Count, submesh.Start);
+                            else
+                                MyStereoRender.DrawGBufferPass(RC, submesh.Count, submesh.Start);
                             break;
                         default:
                             break;
@@ -119,16 +171,39 @@ namespace VRageRender
                     switch (submesh.DrawCommand)
                     {
                         case MyDrawCommandEnum.DrawIndexed:
-                            //MyRender11.AddDebugQueueMessage("GbufferPass DrawIndexedInstanced " + proxy.VertexData.VB[0].DebugName);
-                            RC.DeviceContext.DrawIndexedInstanced(submesh.Count, proxy.InstanceCount, submesh.Start, submesh.BaseVertex, proxy.StartInstance);
+                            if (!MyStereoRender.Enable)
+                                RC.DrawIndexedInstanced(submesh.Count, proxy.InstanceCount, submesh.Start, submesh.BaseVertex, proxy.StartInstance);
+                            else
+                                MyStereoRender.DrawIndexedInstancedGBufferPass(RC, submesh.Count, proxy.InstanceCount, submesh.Start, submesh.BaseVertex, proxy.StartInstance);
                             break;
                         case MyDrawCommandEnum.Draw:
-                            RC.DeviceContext.DrawInstanced(submesh.Count, proxy.InstanceCount, submesh.Start, proxy.StartInstance);
+                            if (!MyStereoRender.Enable)
+                                RC.DrawInstanced(submesh.Count, proxy.InstanceCount, submesh.Start, proxy.StartInstance);
+                            else
+                                MyStereoRender.DrawInstancedGBufferPass(RC, submesh.Count, proxy.InstanceCount, submesh.Start, proxy.StartInstance);
                             break;
                         default:
                             break;
                     }
                 }
+            }
+        }
+
+        private void SetDepthStencilView(bool readOnly)
+        {
+            if (readOnly)
+            {
+                if (MyStereoRender.Enable && MyStereoRender.EnableUsingStencilMask)
+                    RC.SetDepthStencilState(MyDepthStencilStateManager.StereoDepthTestReadOnly);
+                else
+                    RC.SetDepthStencilState(MyDepthStencilStateManager.DepthTestReadOnly);
+            }
+            else
+            {
+                if (MyStereoRender.Enable && MyStereoRender.EnableUsingStencilMask)
+                    RC.SetDepthStencilState(MyDepthStencilStateManager.StereoDepthTestWrite);
+                else
+                    RC.SetDepthStencilState(MyDepthStencilStateManager.DepthTestWrite);
             }
         }
 
@@ -139,11 +214,18 @@ namespace VRageRender
             RC.EndProfilingBlock();
         }
 
+#if XB1
+        public void ObjectCleaner()
+        {
+            Cleanup();
+        }
+#else // !XB1
         [PooledObjectCleaner]
         public static void Cleanup(MyGBufferPass renderPass)
         {
             renderPass.Cleanup();
         }
+#endif // !XB1
 
         internal override void Cleanup()
         {

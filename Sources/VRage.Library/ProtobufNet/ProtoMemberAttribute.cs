@@ -10,6 +10,15 @@ using System.Runtime.CompilerServices;
 
 namespace ProtoBuf
 {
+#if XB1 // XB1_NOPROTOBUF
+    public class ProtoMemberAttribute : Attribute
+    {
+    }
+
+    public class ProtoPartialMemberAttribute : ProtoMemberAttribute
+    {
+    }
+#else // !XB1
     /// <summary>
     /// Declares a member to be used in protocol-buffer serialization, using
     /// the given Tag. A DataFormat may be used to optimise the serialization
@@ -43,7 +52,7 @@ namespace ProtoBuf
             return result;
         }
 
-#if BLITCREMENTAL
+#if UNSHARPER_TMP
         /// <summary>
         /// Creates a new ProtoMemberAttribute instance.
         /// </summary>
@@ -241,7 +250,7 @@ namespace ProtoBuf
             : base(tag)
 #endif
         {
-#if BLITCREMENTAL
+#if UNSHARPER_TMP
 #else
             if (Helpers.IsNullOrEmpty(memberName)) throw new ArgumentNullException("memberName");
 #endif
@@ -253,4 +262,5 @@ namespace ProtoBuf
         public string MemberName { get { return memberName; } }
         private readonly string memberName;
     }
+#endif // !XB1
 }

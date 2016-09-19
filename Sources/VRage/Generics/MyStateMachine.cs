@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Windows.Forms;
 using VRage.Collections;
 using VRage.Utils;
 
@@ -199,7 +198,8 @@ namespace VRage.Generics
                     foreach (var transition in CurrentNode.Transitions)
                     {
                         int transitionPriority = transition.Priority ?? int.MaxValue;
-                        if (transitionPriority <= bestPriority && m_enqueuedActions.Contains(transition.Name))
+                        if (transitionPriority <= bestPriority && m_enqueuedActions.Contains(transition.Name)
+                            && (transition.Conditions.Count == 0 || transition.Evaluate()))
                         {
                             transitionId = transition.Id;
                             nextNode = transition.TargetNode;
@@ -210,7 +210,7 @@ namespace VRage.Generics
                 // transitions checking conditions
                 if (nextNode == null)
                 {
-                    nextNode = CurrentNode.QueryNewState(out transitionId);
+                    nextNode = CurrentNode.QueryNewState(false, out transitionId);
                 }
                 // now try to transfer from one state to another
                 if (nextNode != null)

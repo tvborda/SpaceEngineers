@@ -18,6 +18,7 @@ using VRage;
 using VRage.Network;
 using Sandbox.Engine.Multiplayer;
 using VRage.Game;
+using VRage.Sync;
 
 namespace Sandbox.Game.Weapons
 {
@@ -30,11 +31,19 @@ namespace Sandbox.Game.Weapons
 
         public MyUserControllableGun()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_isShooting = SyncType.CreateAndAddProp<bool>();
+#endif // XB1
+            CreateTerminalControls();
+
             m_isShooting.ValueChanged += (x) => ShootingChanged();
         }
 
-        static MyUserControllableGun()
+        static void CreateTerminalControls()
         {
+            if (MyTerminalControlFactory.AreControlsCreated<MyUserControllableGun>())
+                return;
+
             if (MyFakes.ENABLE_WEAPON_TERMINAL_CONTROL)
             {
                 var shootOnce = new MyTerminalControlButton<MyUserControllableGun>("ShootOnce", MySpaceTexts.Terminal_ShootOnce, MySpaceTexts.Blank, (b) => b.OnShootOncePressed());

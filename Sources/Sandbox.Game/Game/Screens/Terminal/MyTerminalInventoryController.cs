@@ -17,6 +17,7 @@ using VRage;
 using VRage.Game;
 using VRage.Game.Entity;
 using VRage.Input;
+using VRage.Profiler;
 using VRage.Utils;
 using VRageMath;
 
@@ -747,6 +748,7 @@ namespace Sandbox.Game.Gui
                                           m_hideEmptyLeftLabel,
                                           m_blockSearchLeft,
                                           m_blockSearchClearLeft, true);
+            m_leftOwnersControl.SetScrollBarPage(0);
         }
 
         private void RightTypeGroup_SelectedChanged(MyGuiControlRadioButtonGroup obj)
@@ -759,6 +761,7 @@ namespace Sandbox.Game.Gui
                                           m_hideEmptyRightLabel,
                                           m_blockSearchRight,
                                           m_blockSearchClearRight, false);
+            m_rightOwnersControl.SetScrollBarPage(0);
         }
 
         private void throwOutButton_OnButtonClick(MyGuiControlButton sender)
@@ -863,8 +866,9 @@ namespace Sandbox.Game.Gui
 
                 if (srcGrid == dstGrid)
                 {
-                    if (eventArgs.DragFrom.ItemIndex < eventArgs.DropTo.ItemIndex)
-                        eventArgs.DropTo.ItemIndex++;
+                    //GR: Why alter ItemIndex? This caused invalid swapping of items
+                    //if (eventArgs.DragFrom.ItemIndex < eventArgs.DropTo.ItemIndex)
+                    //    eventArgs.DropTo.ItemIndex++;
                     if (eventArgs.DragButton == MySharedButtonsEnum.Secondary)
                     {
                         ShowAmountTransferDialog(inventoryItem, delegate(float amount)
@@ -1098,6 +1102,7 @@ namespace Sandbox.Game.Gui
                         item.Visible = true;
                 }
             }
+            list.SetScrollBarPage();
         }
 
     }

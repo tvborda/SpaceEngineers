@@ -1,4 +1,5 @@
-﻿using SharpDX;
+﻿#if !XB1
+using SharpDX;
 using SharpDX.XAudio2;
 using System;
 using System.Runtime.InteropServices;
@@ -746,7 +747,7 @@ namespace VRage.Audio
         //     call (or after the corresponding SharpDX.XAudio2.XAudio2.CommitChanges(System.Int32)
         //     call, if EnableEffect/DisableEffect was called with a deferred operation
         //     ID).
-        public Bool IsEffectEnabled(int effectIndex)
+        public bool IsEffectEnabled(int effectIndex)
         {
             throw new NotImplementedException("Implement when needed");
         }
@@ -1161,3 +1162,4 @@ namespace VRage.Audio
         #endregion
     }
 }
+#endif // !XB1

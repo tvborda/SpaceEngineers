@@ -6,7 +6,7 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.EntityComponents;
 using Sandbox.Game.Localization;
-using SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 using VRage;
 using VRage.Game;
 using VRage.ModAPI;
@@ -16,14 +16,12 @@ using VRageMath;
 namespace SpaceEngineers.Game.Entities.Blocks
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_SolarPanel))]
-    class MySolarPanel : MyTerminalBlock, IMySolarPanel
+    public class MySolarPanel : MyFunctionalBlock, IMySolarPanel
     {
         static readonly string[] m_emissiveNames = new string[] { "Emissive0", "Emissive1", "Emissive2", "Emissive3" };
 
 	    public MySolarPanelDefinition SolarPanelDefinition { get; private set; }
         public MySolarGameLogicComponent SolarComponent { get; private set; }
-        protected MyEntity3DSoundEmitter m_soundEmitter;
-        internal MyEntity3DSoundEmitter SoundEmitter { get { return m_soundEmitter; } }
 
 	    private MyResourceSourceComponent m_sourceComponent;
 		public MyResourceSourceComponent SourceComp
@@ -35,9 +33,6 @@ namespace SpaceEngineers.Game.Entities.Blocks
 	    public MySolarPanel()
 	    {
             SourceComp = new MyResourceSourceComponent();
-
-            m_soundEmitter = new MyEntity3DSoundEmitter(this, true);
-            NeedsUpdate |= MyEntityUpdateEnum.EACH_100TH_FRAME;
 	    }
 
 	    public override void Init(MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
@@ -85,7 +80,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
             {
                 for (int i = 0; i < 4; i++)
                 {
-                    UpdateNamedEmissiveParts(Render.RenderObjectIDs[0], m_emissiveNames[i], Color.Black, 0);
+                    UpdateNamedEmissiveParts(Render.RenderObjectIDs[0], m_emissiveNames[i], Color.Red, 0);
                 }
                 return;
             }
@@ -114,6 +109,12 @@ namespace SpaceEngineers.Game.Entities.Blocks
             UpdateEmissivity();
         }
 
+        protected override void OnEnabledChanged()
+        {
+            UpdateEmissivity();
+            base.OnEnabledChanged();
+        }
+
         public override void UpdateVisual()
         {
             base.UpdateVisual();
@@ -124,7 +125,6 @@ namespace SpaceEngineers.Game.Entities.Blocks
         public override void UpdateBeforeSimulation100()
         {
             base.UpdateBeforeSimulation100();
-            m_soundEmitter.Update();
             if (CubeGrid.Physics == null)
                 return;
 
@@ -135,6 +135,16 @@ namespace SpaceEngineers.Game.Entities.Blocks
 			UpdateDisplay();
         
             RaisePropertiesChanged();
+        }
+
+        protected override void Closing()
+        {
+            base.Closing();
+            if (m_soundEmitter != null)
+            {
+                m_soundEmitter.StopSound(true);
+                m_soundEmitter = null;
+            }
         }
 
         public override void SetDamageEffect(bool show)

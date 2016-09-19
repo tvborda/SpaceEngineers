@@ -6,6 +6,11 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Security;
+#if XB1 // XB1_SYNC_SERIALIZER_NOEMIT
+using System.Reflection;
+using VRage.Reflection;
+#endif // XB1
+
 
 namespace VRageMath
 {
@@ -14,7 +19,12 @@ namespace VRageMath
     /// </summary>
     [ProtoBuf.ProtoContract, Serializable]    
     [StructLayout(LayoutKind.Explicit)]
+#if !XB1 // XB1_SYNC_SERIALIZER_NOEMIT
     public struct Matrix : IEquatable<Matrix>
+#else // XB1
+    public struct Matrix : IEquatable<Matrix>, IMySetGetMemberDataHelper
+#endif // XB1
+
     {
         private unsafe struct F16
         {
@@ -26,7 +36,7 @@ namespace VRageMath
         public static Matrix Zero = new Matrix(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 
-#if !BLIT
+#if !XB1
 
         /// <summary>
         /// Matrix values
@@ -1496,6 +1506,32 @@ namespace VRageMath
             result.M44 = 1f;
         }
 
+        public static void CreateRotationFromTwoVectors(ref Vector3 fromVector, ref Vector3 toVector, out Matrix resultMatrix)
+        {
+            Vector3 fromVectorNormalized = Vector3.Normalize(fromVector);
+            Vector3 toVectorNormalized = Vector3.Normalize(toVector);
+
+            Vector3 rotAxis;
+            Vector3 thirdAxis;
+            Vector3.Cross(ref fromVectorNormalized, ref toVectorNormalized, out rotAxis);
+            rotAxis.Normalize();
+            Vector3.Cross(ref fromVectorNormalized, ref rotAxis, out thirdAxis);
+            Matrix fromMatrixTransposed = new Matrix(
+                fromVectorNormalized.X, rotAxis.X, thirdAxis.X, 0,
+                fromVectorNormalized.Y, rotAxis.Y, thirdAxis.Y, 0,
+                fromVectorNormalized.Z, rotAxis.Z, thirdAxis.Z, 0,
+                0, 0, 0, 1);
+            
+            Vector3.Cross(ref toVectorNormalized, ref rotAxis, out thirdAxis);
+            Matrix toMatrix = new Matrix(
+                toVectorNormalized.X, toVectorNormalized.Y, toVectorNormalized.Z, 0,
+                rotAxis.X, rotAxis.Y, rotAxis.Z, 0,
+                thirdAxis.X, thirdAxis.Y, thirdAxis.Z, 0,
+                0, 0, 0, 1);
+
+            resultMatrix = fromMatrixTransposed * toMatrix;
+        }
+
         /// <summary>
         /// Builds a perspective projection matrix based on a field of view and returns by value.
         /// </summary>
@@ -2732,6 +2768,11 @@ return flag;
         /// <param name="matrix">Source matrix.</param>
         public static Matrix Invert(Matrix matrix)
         {
+            return Invert(ref matrix);
+        }
+
+        public static Matrix Invert(ref Matrix matrix)
+        {
             float num1 = matrix.M11;
             float num2 = matrix.M12;
             float num3 = matrix.M13;
@@ -3698,6 +3739,84 @@ return flag;
         //        (double)m.M41, (double)m.M42, (double)m.M43, (double)m.M44);
         //}
 
+#if XB1 // XB1_SYNC_SERIALIZER_NOEMIT
+        public object GetMemberData(MemberInfo m)
+        {
+            if (m.Name.Length > 1)
+            {
+                if (m.Name[0] != 'M')
+                {
+                    if (m.Name == "Up")
+                        return Up;
+                    if (m.Name == "Down")
+                        return Down;
+                    if (m.Name == "Right")
+                        return Right;
+                    if (m.Name == "Left")
+                        return Left;
+                    if (m.Name == "Forward")
+                        return Forward;
+                    if (m.Name == "Backward")
+                        return Backward;
+                    if (m.Name == "Translation")
+                        return Translation;
+                }
+                else
+                {
+                    if (m.Name.Length > 2)
+                    {
+                        if (m.Name[1] == '1')
+                        {
+                            if (m.Name[2] == '1')
+                                return M11;
+                            if (m.Name[2] == '2')
+                                return M12;
+                            if (m.Name[2] == '3')
+                                return M13;
+                            if (m.Name[2] == '4')
+                                return M14;
+                        }
+                        if (m.Name[1] == '2')
+                        {
+                            if (m.Name[2] == '1')
+                                return M21;
+                            if (m.Name[2] == '2')
+                                return M22;
+                            if (m.Name[2] == '3')
+                                return M23;
+                            if (m.Name[2] == '4')
+                                return M24;
+                        }
+                        if (m.Name[1] == '3')
+                        {
+                            if (m.Name[2] == '1')
+                                return M31;
+                            if (m.Name[2] == '2')
+                                return M32;
+                            if (m.Name[2] == '3')
+                                return M33;
+                            if (m.Name[2] == '4')
+                                return M34;
+                        }
+                        if (m.Name[1] == '4')
+                        {
+                            if (m.Name[2] == '1')
+                                return M41;
+                            if (m.Name[2] == '2')
+                                return M42;
+                            if (m.Name[2] == '3')
+                                return M43;
+                            if (m.Name[2] == '4')
+                                return M44;
+                        }
+                    }
+                }
+            }
+
+            System.Diagnostics.Debug.Assert(false, "TODO for XB1.");
+            return null;
+        }
+#endif // XB1
     }
 
 }

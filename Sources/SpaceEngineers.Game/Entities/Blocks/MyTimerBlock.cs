@@ -15,18 +15,19 @@ using Sandbox.Game.Localization;
 using Sandbox.Game.Multiplayer;
 using Sandbox.Game.Screens.Helpers;
 using Sandbox.Graphics.GUI;
-using SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 using VRage;
 using VRage.Game;
 using VRage.ModAPI;
 using VRage.Network;
+using VRage.Sync;
 using VRage.Utils;
 using VRageMath;
 
 namespace SpaceEngineers.Game.Entities.Blocks
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_TimerBlock))]
-    internal class MyTimerBlock : MyFunctionalBlock, IMyTimerBlock
+    public class MyTimerBlock : MyFunctionalBlock, IMyTimerBlock, IMyTriggerableBlock
     {
         public MyToolbar Toolbar { get; set; }
 
@@ -63,21 +64,30 @@ namespace SpaceEngineers.Game.Entities.Blocks
             }
         }
 
-        private static readonly List<MyToolbar> m_openedToolbars;
+        private static List<MyToolbar> m_openedToolbars;
         private static bool m_shouldSetOtherToolbars;
         bool m_syncing = false;
 
         readonly Sync<int> m_timerSync;
         public MyTimerBlock()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_isCountingDown = SyncType.CreateAndAddProp<bool>();
+            m_silent = SyncType.CreateAndAddProp<bool>();
+            m_timerSync = SyncType.CreateAndAddProp<int>();
+#endif // XB1
+            CreateTerminalControls();
+
+            m_openedToolbars = new List<MyToolbar>();
             m_timerSync.ValueChanged += (x) => TimerChanged();
             m_isCountingDown.ValueChanged += (x) => CountDownChanged();
             m_isCountingDown.ValidateNever();
         }
 
-        static MyTimerBlock()
+        static void CreateTerminalControls()
         {
-            m_openedToolbars = new List<MyToolbar>();
+            if (MyTerminalControlFactory.AreControlsCreated<MyTimerBlock>())
+                return;
 
             var silent = new MyTerminalControlCheckbox<MyTimerBlock>("Silent", MySpaceTexts.BlockPropertyTitle_Silent, MySpaceTexts.ToolTipTimerBlock_Silent);
             silent.Getter = (x) => x.Silent;
@@ -254,7 +264,6 @@ namespace SpaceEngineers.Game.Entities.Blocks
     
             if (m_countdownMsCurrent > 0)
                 NeedsUpdate |= MyEntityUpdateEnum.EACH_10TH_FRAME;
-            NeedsUpdate |= MyEntityUpdateEnum.EACH_100TH_FRAME;
 	       
             ResourceSink.IsPoweredChanged += Receiver_IsPoweredChanged;
 			ResourceSink.Update();
@@ -338,9 +347,9 @@ namespace SpaceEngineers.Game.Entities.Blocks
             RaisePropertiesChanged();
         }
 
-        public override void UpdateBeforeSimulation100()
+        public override void UpdateSoundEmitters()
         {
-            base.UpdateBeforeSimulation100();
+            base.UpdateSoundEmitters();
             if (m_beepEmitter != null)
                 m_beepEmitter.Update();
         }
@@ -389,6 +398,11 @@ namespace SpaceEngineers.Game.Entities.Blocks
             {
                 UpdateEmissivity();
             }
+        }
+
+        void IMyTriggerableBlock.Trigger()
+        {
+            OnTrigger();
         }
 
         private void UpdateEmissivity()
@@ -464,8 +478,8 @@ namespace SpaceEngineers.Game.Entities.Blocks
         {
             get { return Math.Max(m_countdownMsStart, 1000) / 1000; }
         }
-        bool IMyTimerBlock.IsCountingDown { get { return IsCountingDown; } }
-        float IMyTimerBlock.TriggerDelay { get { return TriggerDelay; } }
+        bool ModAPI.Ingame.IMyTimerBlock.IsCountingDown { get { return IsCountingDown; } }
+        float ModAPI.Ingame.IMyTimerBlock.TriggerDelay { get { return TriggerDelay; } }
 
         [Event, Reliable, Server, Broadcast]
         void SendToolbarItemChanged(ToolbarItem sentItem, int index)

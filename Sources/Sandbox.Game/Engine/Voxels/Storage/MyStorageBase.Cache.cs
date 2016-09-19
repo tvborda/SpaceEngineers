@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using ParallelTasks;
 using Sandbox.Engine.Voxels.Storage;
 using Sandbox.Game.World;
 using VRage;
@@ -119,7 +117,7 @@ namespace Sandbox.Engine.Voxels
                                 data[6] = voxel[z1 + y1 + x0];
                                 data[7] = voxel[z1 + y1 + x1];
 
-                                store[x + y + z] = filter(data);
+                                store[x + y + z] = filter(data, lod);
                             }
                         }
                     }
@@ -294,13 +292,23 @@ namespace Sandbox.Engine.Voxels
 
         private static MyVoxelOperationsSessionComponent OperationsComponent
         {
-            get { return MySession.Static.GetSessionComponent<MyVoxelOperationsSessionComponent>(); }
+            get { return MySession.Static.GetComponent<MyVoxelOperationsSessionComponent>(); }
         }
 
         public bool CachedWrites
         {
             get { return m_cachedWrites && MyVoxelOperationsSessionComponent.EnableCache; }
             set { m_cachedWrites = value; }
+        }
+
+        public bool HasPendingWrites
+        {
+            get { return m_pendingChunksToWrite.Count > 0; }
+        }
+
+        public bool HasCachedChunks
+        {
+            get { return m_chunksbyAge.Count - m_pendingChunksToWrite.Count > 0; }
         }
 
         private bool m_cachedWrites = false;

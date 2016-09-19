@@ -591,7 +591,9 @@ namespace Sandbox.Game.Multiplayer
             }
             else
             {
+#if !XB1_NOMULTIPLAYER
                 Sync.Players.CreateNewIdentity(displayName, identiyId, model: null);
+#endif // !XB1_NOMULTIPLAYER
             }
         }
 
@@ -1058,8 +1060,8 @@ namespace Sandbox.Game.Multiplayer
         {
             Sync.Players.SetControlledEntityInternal(player.Id, controlledEntity);
 
-            if (player == MySession.Static.LocalHumanPlayer)
-                MySession.Static.SetCameraController(MyCameraControllerEnum.Entity, MySession.Static.LocalCharacter);
+            //if (player == MySession.Static.LocalHumanPlayer)
+            //    MySession.Static.SetCameraController(MyCameraControllerEnum.Entity, MySession.Static.LocalCharacter);
         }
 
         public void SetPlayerCharacter(MyPlayer player, MyCharacter newCharacter, MyEntity spawnedBy)
@@ -1099,6 +1101,15 @@ namespace Sandbox.Game.Multiplayer
             return m_players.Values;
         }
 
+        /// <summary>
+        /// Gets current online player count.
+        /// </summary>
+        /// <returns>Returns current online player count.</returns>
+        public int GetOnlinePlayerCount()
+        {
+            return m_players.Values.Count;
+        }
+
         public Dictionary<long, MyIdentity>.ValueCollection GetAllIdentities()
         {
             return m_allIdentities.Values;
@@ -1114,6 +1125,11 @@ namespace Sandbox.Game.Multiplayer
             return m_playerIdentityIds.Keys;
         }
 
+        public DictionaryReader<PlayerId, long> GetAllPlayerIdentities()
+        {
+            return m_playerIdentityIds;
+        }
+
         public void UpdatePlayerControllers(long controllerId)
         {
             foreach (var player in m_players)
@@ -1124,7 +1140,6 @@ namespace Sandbox.Game.Multiplayer
                 }
             }
         }
-
         #endregion
 
         #region Control extension & reduction
@@ -1380,12 +1395,12 @@ namespace Sandbox.Game.Multiplayer
                 handler();
         }
 
-        public static void RespawnRequest(bool joinGame, bool newPlayer, long respawnEntityId, string shipPrefabId, int playerSerialId = 0, Vector3D? spawnPosition = null, VRage.ObjectBuilders.SerializableDefinitionId? botDefinitionId = null)
+        public static void RespawnRequest(bool joinGame, bool newIdentity, long respawnEntityId, string shipPrefabId, int playerSerialId = 0, Vector3D? spawnPosition = null, VRage.ObjectBuilders.SerializableDefinitionId? botDefinitionId = null)
         {
             var msg = new RespawnMsg();
             msg.JoinGame = joinGame;
             msg.RespawnEntityId = respawnEntityId;
-            msg.NewIdentity = newPlayer;
+            msg.NewIdentity = newIdentity;
             msg.RespawnShipId = shipPrefabId;
             msg.PlayerSerialId = playerSerialId;
             msg.SpawnPosition = spawnPosition;
@@ -1712,7 +1727,7 @@ namespace Sandbox.Game.Multiplayer
                 }
             }
 
-            if (Sync.IsServer)
+            if (Sync.IsServer && Sync.MyId != 0)
             {
                 MyMultiplayer.RaiseStaticEvent(s => MyPlayerCollection.OnIdentityCreated, addToNpcs, identity.IdentityId, identity.DisplayName);
             }
@@ -1839,6 +1854,7 @@ namespace Sandbox.Game.Multiplayer
         [Conditional("DEBUG")]
         public void WriteDebugInfo()
         {
+#if !XB1
             var trace = new StackTrace();
             var previousFrame = trace.GetFrame(1);
 
@@ -1860,6 +1876,7 @@ namespace Sandbox.Game.Multiplayer
             {
                 MyTrace.Send(TraceWindow.MultiplayerFiltered, entity.EntityId.ToString("X8"), entity.ToString());
             }
+#endif // !XB1
         }
 
         [Conditional("DEBUG")]

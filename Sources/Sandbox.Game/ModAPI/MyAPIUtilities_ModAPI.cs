@@ -69,6 +69,16 @@ namespace Sandbox.ModAPI
             if (handle != null) handle(messageText, ref sendToOthers);
         }
 
+        private string StripDllExtIfNecessary(string name)
+        {
+            string ext = ".dll";
+            if( name.EndsWith(ext, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return name.Substring(0, name.Length - ext.Length);
+            }
+            return name;
+        }
+
         System.IO.TextReader IMyUtilities.ReadFileInGlobalStorage(string file)
         {
             if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
@@ -84,13 +94,14 @@ namespace Sandbox.ModAPI
             throw new FileNotFoundException();
         }
 
+#if !XB1
         System.IO.TextReader IMyUtilities.ReadFileInLocalStorage(string file, Type callingType)
         {
             if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
             {
                 throw new FileNotFoundException();
             }
-            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, callingType.Assembly.ManifestModule.ScopeName, file);
+            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
             var stream = MyFileSystem.OpenRead(path);
             if (stream != null)
             {
@@ -98,6 +109,22 @@ namespace Sandbox.ModAPI
             }
             throw new FileNotFoundException();
         }
+
+        System.IO.TextReader IMyUtilities.ReadFileInWorldStorage(string file, Type callingType)
+        {
+            if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+            {
+                throw new FileNotFoundException();
+            }
+            var path = Path.Combine(MySession.Static.CurrentPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
+            var stream = MyFileSystem.OpenRead(path);
+            if (stream != null)
+            {
+                return new StreamReader(stream);
+            }
+            throw new FileNotFoundException();
+        }
+#endif // !XB1
 
         TextWriter IMyUtilities.WriteFileInGlobalStorage(string file)
         {
@@ -114,6 +141,7 @@ namespace Sandbox.ModAPI
             throw new FileNotFoundException();
         }
 
+#if !XB1
         TextWriter IMyUtilities.WriteFileInLocalStorage(string file, Type callingType)
         {
             if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
@@ -121,7 +149,7 @@ namespace Sandbox.ModAPI
                 throw new FileNotFoundException();
             }
 
-            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, callingType.Assembly.ManifestModule.ScopeName, file);
+            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
             var stream = MyFileSystem.OpenWrite(path);
             if (stream != null)
             {
@@ -130,6 +158,22 @@ namespace Sandbox.ModAPI
             throw new FileNotFoundException();
         }
 
+        TextWriter IMyUtilities.WriteFileInWorldStorage(string file, Type callingType)
+        {
+            if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+            {
+                throw new FileNotFoundException();
+            }
+
+            var path = Path.Combine(MySession.Static.CurrentPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
+            var stream = MyFileSystem.OpenWrite(path);
+            if (stream != null)
+            {
+                return new StreamWriter(stream);
+            }
+            throw new FileNotFoundException();
+        }
+#endif // !XB1
 
         event MessageEnteredDel IMyUtilities.MessageEntered
         {
@@ -219,6 +263,7 @@ namespace Sandbox.ModAPI
             return File.Exists(path);
         }
 
+#if !XB1
         bool IMyUtilities.FileExistsInLocalStorage(string file, Type callingType)
         {
             if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
@@ -226,7 +271,19 @@ namespace Sandbox.ModAPI
                 return false;
             }
 
-            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, callingType.Assembly.ManifestModule.ScopeName, file);
+            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
+
+            return File.Exists(path);
+        }
+
+        bool IMyUtilities.FileExistsInWorldStorage(string file, Type callingType)
+        {
+            if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+            {
+                return false;
+            }
+
+            var path = Path.Combine(MySession.Static.CurrentPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
 
             return File.Exists(path);
         }
@@ -235,10 +292,20 @@ namespace Sandbox.ModAPI
         {
             if (true == (this as IMyUtilities).FileExistsInLocalStorage(file, callingType))
             {
-                var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, callingType.Assembly.ManifestModule.ScopeName, file);
+                var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
                 File.Delete(path);
             }
         }
+
+        void IMyUtilities.DeleteFileInWorldStorage(string file, Type callingType)
+        {
+            if (true == (this as IMyUtilities).FileExistsInLocalStorage(file, callingType))
+            {
+                var path = Path.Combine(MySession.Static.CurrentPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
+                File.Delete(path);
+            }
+        }
+#endif // !XB1
 
         void IMyUtilities.DeleteFileInGlobalStorage(string file)
         {
@@ -283,13 +350,14 @@ namespace Sandbox.ModAPI
             throw new FileNotFoundException();
         }
 
+#if !XB1
         BinaryReader IMyUtilities.ReadBinaryFileInLocalStorage(string file, Type callingType)
         {
             if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
             {
                 throw new FileNotFoundException();
             }
-            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, callingType.Assembly.ManifestModule.ScopeName, file);
+            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
             var stream = MyFileSystem.OpenRead(path);
             if (stream != null)
             {
@@ -297,6 +365,22 @@ namespace Sandbox.ModAPI
             }
             throw new FileNotFoundException();
         }
+
+        BinaryReader IMyUtilities.ReadBinaryFileInWorldStorage(string file, Type callingType)
+        {
+            if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+            {
+                throw new FileNotFoundException();
+            }
+            var path = Path.Combine(MySession.Static.CurrentPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
+            var stream = MyFileSystem.OpenRead(path);
+            if (stream != null)
+            {
+                return new BinaryReader(stream);
+            }
+            throw new FileNotFoundException();
+        }
+#endif // !XB1
 
         BinaryWriter IMyUtilities.WriteBinaryFileInGlobalStorage(string file)
         {
@@ -313,13 +397,14 @@ namespace Sandbox.ModAPI
             throw new FileNotFoundException();
         }
 
+#if !XB1
         BinaryWriter IMyUtilities.WriteBinaryFileInLocalStorage(string file, Type callingType)
         {
             if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
             {
                 throw new FileNotFoundException();
             }
-            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, callingType.Assembly.ManifestModule.ScopeName, file);
+            var path = Path.Combine(MyFileSystem.UserDataPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
             var stream = MyFileSystem.OpenWrite(path);
             if (stream != null)
             {
@@ -328,6 +413,21 @@ namespace Sandbox.ModAPI
             throw new FileNotFoundException();
         }
 
+        BinaryWriter IMyUtilities.WriteBinaryFileInWorldStorage(string file, Type callingType)
+        {
+            if (file.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
+            {
+                throw new FileNotFoundException();
+            }
+            var path = Path.Combine(MySession.Static.CurrentPath, STORAGE_FOLDER, StripDllExtIfNecessary(callingType.Assembly.ManifestModule.ScopeName), file);
+            var stream = MyFileSystem.OpenWrite(path);
+            if (stream != null)
+            {
+                return new BinaryWriter(stream);
+            }
+            throw new FileNotFoundException();
+        }
+#endif // !XB1
 
         public Dictionary<string, object> Variables = new Dictionary<string, object>();
         void IMyUtilities.SetVariable<T>(string name, T value)

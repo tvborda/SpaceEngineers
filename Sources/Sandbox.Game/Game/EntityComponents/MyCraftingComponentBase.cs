@@ -15,7 +15,6 @@ using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ObjectBuilders.ComponentSystem;
-using VRage.Library.Sync;
 using VRage.ModAPI;
 using VRage.Game.ModAPI.Ingame;
 using VRage.Network;
@@ -634,19 +633,20 @@ namespace Sandbox.Game.Components
 
             foreach (var reqItem in definition.Prerequisites)
             {
-                var amountToRemove = reqItem.Amount * amountMult;
-                var itemId = reqItem.Id;
+                MyFixedPoint amountToRemove = reqItem.Amount * amountMult;
+                MyDefinitionId itemId = reqItem.Id;
                 MyFixedPoint removed = 0;
 
                 if (MySessionComponentEquivalency.Static != null && MySessionComponentEquivalency.Static.HasEquivalents(itemId))
                 {
+                    MyFixedPoint amountRemaining = amountToRemove;
                     var eqGroup = MySessionComponentEquivalency.Static.GetEquivalents(itemId);
                     foreach (var element in eqGroup)
                     {
-                        if (removed == amountToRemove)
-                            continue;
-
-                        removed += inventory.RemoveItemsOfType(amountToRemove, element);
+                        MyFixedPoint removedThisItem = inventory.RemoveItemsOfType(amountRemaining, element);
+                        amountRemaining -= removedThisItem;
+                        removed += removedThisItem;
+                        if (amountRemaining == 0) break;
                     }
                 }
                 else
@@ -1165,7 +1165,7 @@ namespace Sandbox.Game.Components
             m_lockedByEntityId = -1;
         }
 
-        public override VRage.Game.ObjectBuilders.ComponentSystem.MyObjectBuilder_ComponentBase Serialize()
+        public override MyObjectBuilder_ComponentBase Serialize(bool copy = false)
         {
             var builder = base.Serialize();
             var craftBuilder = builder as MyObjectBuilder_CraftingComponentBase;

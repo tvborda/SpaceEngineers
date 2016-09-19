@@ -1,8 +1,9 @@
 ﻿using System;
-using VRage.Animations;
 using VRage.Utils;
 using VRageMath;
 using VRageRender;
+using VRageRender.Animations;
+using VRageRender.Utils;
 
 
 namespace VRage.Game
@@ -53,6 +54,7 @@ namespace VRage.Game
         public float Thickness;
         public ParticleFlags Flags;
         public float ColorIntensity;
+        public float SoftParticleDistanceScale;
 
         public MyAnimatedPropertyVector3 Pivot = null; 
         public MyAnimatedPropertyVector3 PivotRotation = null; //degrees
@@ -234,7 +236,7 @@ namespace VRage.Game
         //  Return false if particle dies/timeouts in this tick.
         public bool Draw(VRageRender.MyBillboard billboard)
         {
-            if (Pivot != null)
+            if (Pivot != null && !MyParticlesManager.Paused)
             {
                 if (PivotRotation != null)
                 {
@@ -285,7 +287,7 @@ namespace VRage.Game
             billboard.ContainedBillboards.Clear();
 
             billboard.Near = m_generation.GetEffect().Near;
-            billboard.Lowres = m_generation.GetEffect().LowRes || VRageRender.MyRenderConstants.RenderQualityProfile.LowResParticles;
+            billboard.Lowres = VRageRender.MyRenderConstants.RenderQualityProfile.LowResParticles;
             billboard.CustomViewProjection = -1;
             billboard.ParentID = -1;
             billboard.AlphaCutout = actualAlphaCutout;
@@ -374,11 +376,20 @@ namespace VRage.Game
                 {
                     Vector3 cameraToPoint = Vector3.Normalize(m_actualPosition - MyTransparentGeometry.Camera.Translation);
                     Vector3 localDir = m_generation.GetEffect().WorldMatrix.Forward;
+                    float dot = cameraToPoint.Dot(localDir);
+                    Matrix velocityRef;
+                    if (dot >= 0.9999f)
+                    {
+                        // TODO Petr: probably not correct, at least it does not produce NaN positions
+                        velocityRef = Matrix.CreateTranslation(m_actualPosition);
+                    }
+                    else
+                    {
+                        Vector3 sideVector = Vector3.Cross(cameraToPoint, localDir);
+                        Vector3 upVector = Vector3.Cross(sideVector, localDir);
 
-                    Vector3 sideVector = Vector3.Cross(cameraToPoint, localDir);
-                    Vector3 upVector = Vector3.Cross(sideVector, localDir);
-
-                    Matrix velocityRef = Matrix.CreateWorld(m_actualPosition, localDir, upVector);
+                        velocityRef = Matrix.CreateWorld(m_actualPosition, localDir, upVector);
+                    }
 
                     transform = Matrix.CreateFromAxisAngle(velocityRef.Right, m_actualAngle.X) *
                     Matrix.CreateFromAxisAngle(velocityRef.Up, m_actualAngle.Y) *
@@ -535,6 +546,7 @@ namespace VRage.Game
 
             billboard.Color = color * alpha * m_generation.GetEffect().UserColorMultiplier;
             billboard.ColorIntensity = ColorIntensity;
+            billboard.SoftParticleDistanceScale = SoftParticleDistanceScale;
 
             MyTransparentGeometry.EndParticleProfilingBlock();
 

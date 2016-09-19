@@ -1,21 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using Sandbox.Definitions;
+﻿using System.Linq;
 using Sandbox.Engine.Voxels;
 using Sandbox.Engine.Voxels.Storage;
-using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Gui;
 using Sandbox.Game.World;
-using Sandbox.Graphics.GUI;
-using VRage;
-using VRage.FileSystem;
-using VRage.Game.Entity;
 using VRage.Input;
-using VRage.Utils;
 using VRage.Voxels;
 using VRageMath;
 using VRageRender;
@@ -45,7 +33,7 @@ namespace Sandbox.Game.GUI.DebugInputComponents
 
             private bool ToggleWrite()
             {
-                var ops = MySession.Static.GetSessionComponent<MyVoxelOperationsSessionComponent>();
+                var ops = MySession.Static.GetComponent<MyVoxelOperationsSessionComponent>();
                 ops.ShouldWrite = !ops.ShouldWrite;
 
                 return true;
@@ -53,7 +41,7 @@ namespace Sandbox.Game.GUI.DebugInputComponents
 
             private bool ToggleFlush()
             {
-                var ops = MySession.Static.GetSessionComponent<MyVoxelOperationsSessionComponent>();
+                var ops = MySession.Static.GetComponent<MyVoxelOperationsSessionComponent>();
                 ops.ShouldFlush = !ops.ShouldFlush;
 
                 return true;
@@ -72,7 +60,7 @@ namespace Sandbox.Game.GUI.DebugInputComponents
 
                 if (MySession.Static == null) return;
 
-                var ops = MySession.Static.GetSessionComponent<MyVoxelOperationsSessionComponent>();
+                var ops = MySession.Static.GetComponent<MyVoxelOperationsSessionComponent>();
 
                 if (ops != null)
                 {

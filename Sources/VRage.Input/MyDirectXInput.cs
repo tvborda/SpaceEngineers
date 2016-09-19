@@ -1,4 +1,4 @@
-﻿#if !UNSHARPER
+﻿#if !XB1
 #region Using
 
 using SharpDX.DirectInput;
@@ -18,7 +18,9 @@ using VRage.Serialization;
 using VRage.Utils;
 using VRage.Win32;
 using VRageMath;
-
+using VRage.OpenVRWrapper;
+using VRage.Profiler;
+using VRageRender.ExternalApp;
 
 #endregion
 
@@ -546,6 +548,7 @@ namespace VRage.Input
             m_previousMouseState = m_actualMouseState;
             m_actualMouseState = new MyMouseState();
             m_actualMouseStateRaw.ClearPosition();
+            MyOpenVR.ClearButtonStates();
         }
 
         public void UpdateStatesFromPlayback(MyKeyboardState currentKeyboard, MyKeyboardState previousKeyboard, MyMouseState currentMouse, MyMouseState previousMouse, JoystickState currentJoystick, JoystickState previousJoystick, int x, int y)
@@ -578,6 +581,9 @@ namespace VRage.Input
             int x, y;
             MyWindowsMouse.GetPosition(out x, out y);
             m_absoluteMousePosition = new Vector2(x, y);
+
+            MyOpenVR.ClearButtonStates();
+            MyOpenVR.PollEvents();//if this crashes because of some strange error you don't know, maybe openvr_api.cs was updated and you should check VREvent_Keyboard_t definition there (or just comment it out from VREvent_Data_t :-/ )
 
             if (IsJoystickConnected())
             {
@@ -918,7 +924,7 @@ namespace VRage.Input
         //True if any ALT key is pressed
         public bool IsAnyAltKeyPressed()
         {
-            return IsKeyPress(MyKeys.LeftAlt) || IsKeyPress(MyKeys.RightAlt);
+            return IsKeyPress(MyKeys.Alt) || IsKeyPress(MyKeys.LeftAlt) || IsKeyPress(MyKeys.RightAlt);
         }
 
         //True if any CTRL key is pressed

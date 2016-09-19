@@ -1,8 +1,9 @@
-﻿using System;
+﻿#if !XB1
+using System;
 using System.Reflection;
 using System.Reflection.Emit;
 
-#if !BLIT
+#if !UNSHARPER_TMP
 
 namespace VRage
 {
@@ -89,3 +90,4 @@ namespace VRage
 }
 
 #endif
+#endif // !XB1

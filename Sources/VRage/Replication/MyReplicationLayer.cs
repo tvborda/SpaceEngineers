@@ -11,6 +11,8 @@ using VRage.Library.Utils;
 using VRage.Plugins;
 using VRage.Utils;
 using VRageMath;
+using VRage.Library;
+using VRage.Profiler;
 
 namespace VRage.Network
 {
@@ -271,7 +273,7 @@ namespace VRage.Network
         /// Returns string with current multiplayer status. Use only for debugging.
         /// </summary>
         /// <returns>Already formatted string with current multiplayer status.</returns>
-        public virtual string GetMultiplayerStat() { return "Multiplayer Statistics:" + Environment.NewLine; }
+        public virtual string GetMultiplayerStat() { return "Multiplayer Statistics:" + MyEnvironment.NewLine; }
 
         #endregion
 

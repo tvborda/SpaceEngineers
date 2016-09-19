@@ -1,10 +1,4 @@
-﻿using Sandbox.Common.ObjectBuilders.Definitions;
-using Sandbox.Engine.Utils;
-using Sandbox.Game.Weapons;
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Text;
+﻿using System.Collections.Generic;
 using VRage.Game;
 using VRage.Utils;
 using VRage.Voxels;
@@ -137,7 +131,7 @@ namespace Sandbox.Game
         public const float EXPLOSION_STRENGTH_IMPULSE = 100;
         public const float EXPLOSION_STRENGTH_ANGULAR_IMPULSE = 50000;
         public const float EXPLOSION_STRENGTH_ANGULAR_IMPULSE_PLAYER_MULTIPLICATOR = 0.25f;
-        public const float EXPLOSION_RADIUS_MULTIPLIER_FOR_IMPULSE = 1f;          //  If we multiply this number by explosion radius (which is used for cuting voxels and drawing particles), we get radius for applying throwing force to surounding objects
+        public const float EXPLOSION_RADIUS_MULTIPLIER_FOR_IMPULSE = 1.25f;          //  If we multiply this number by explosion radius (which is used for cuting voxels and drawing particles), we get radius for applying throwing force to surounding objects
         public const float EXPLOSION_RADIUS_MULTPLIER_FOR_DIRT_GLASS_DECALS = 3;          //  If we multiply this number by explosion radius (which is used for cuting voxels and drawing particles), we get radius for applying dirt decals on ship glass
         public const float EXPLOSION_RANDOM_RADIUS_MAX = 25;
         public const float EXPLOSION_RANDOM_RADIUS_MIN = EXPLOSION_RANDOM_RADIUS_MAX * 0.8f;
@@ -188,15 +182,14 @@ namespace Sandbox.Game
 
         public const float MIN_REQUIRED_POWER_THRUST_CHANGE_THRESHOLD = 0.001f / 50000;
 
-        public const float MAX_REQUIRED_POWER_COLLECTOR = 100.0f / 50000;
-        public const float MAX_REQUIRED_POWER_CONNECTOR = 0.005f;
+        public const float MAX_REQUIRED_POWER_CONNECTOR = 0.001f;
         public const float REQUIRED_INPUT_CONVEYOR_LINE = 0.00002f; // 20 W per tube
     }
 
     public static class MyDebrisConstants
     {
-        public const int EXPLOSION_DEBRIS_LIFESPAN_MIN_IN_MILISECONDS = 5000;
-        public const int EXPLOSION_DEBRIS_LIFESPAN_MAX_IN_MILISECONDS = 10000;
+        public const int EXPLOSION_DEBRIS_LIFESPAN_MIN_IN_MILISECONDS = 10000;
+        public const int EXPLOSION_DEBRIS_LIFESPAN_MAX_IN_MILISECONDS = 20000;
         public const int EXPLOSION_DEBRIS_OBJECTS_MAX = 150;
         public const float EXPLOSION_DEBRIS_INITIAL_SPEED_MIN = 4.0f;
         public const float EXPLOSION_DEBRIS_INITIAL_SPEED_MAX = 8.0f;

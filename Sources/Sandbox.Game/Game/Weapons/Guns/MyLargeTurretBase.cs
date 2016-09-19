@@ -41,10 +41,21 @@ using Sandbox.Engine.Multiplayer;
 using Sandbox.Game.Weapons.Guns.Barrels;
 using VRage;
 using VRage.Game;
-using VRage.Game.ModAPI.Ingame;
+using VRage.Game.ModAPI;
 using VRage.Game.ModAPI.Interfaces;
 using VRage.Game.Utils;
+using VRage.Profiler;
+using VRage.Sync;
+using VRageRender.Import;
 using IMyControllableEntity = Sandbox.Game.Entities.IMyControllableEntity;
+using IMyEntity = VRage.ModAPI.IMyEntity;
+using IMyInventory = VRage.Game.ModAPI.Ingame.IMyInventory;
+
+#if XB1 // XB1_SYNC_SERIALIZER_NOEMIT
+using System.Reflection;
+using VRage.Reflection;
+#endif // XB1
+
 
 #endregion
 
@@ -67,6 +78,9 @@ namespace Sandbox.Game.Weapons
     public abstract partial class MyLargeTurretBase : MyUserControllableGun, IMyGunObject<MyGunBase>, VRage.Game.ModAPI.Ingame.IMyInventoryOwner, VRage.Game.ModAPI.Interfaces.IMyCameraController, IMyControllableEntity, IMyUsableEntity, IMyGunBaseUser
     {
         private bool m_hidetoolbar;
+
+        //Should be empty added for consistency with checks for other Entities with toolbae (e.g. Character, MyCockpit see MyToolbarComponent)
+        private MyToolbar m_toolbar;
 
         interface IMyPredicionType
         {
@@ -391,10 +405,27 @@ namespace Sandbox.Game.Weapons
             public float Elevation;
         }
 
+#if !XB1 // XB1_SYNC_SERIALIZER_NOEMIT
         struct CurrentTargetSync
+#else // XB1
+        struct CurrentTargetSync : IMySetGetMemberDataHelper
+#endif // XB1
         {
             public long TargetId;
             public bool IsPotential;
+
+#if XB1 // XB1_SYNC_SERIALIZER_NOEMIT
+            public object GetMemberData(MemberInfo m)
+            {
+                if (m.Name == "TargetId")
+                    return TargetId;
+                if (m.Name == "IsPotential")
+                    return IsPotential;
+
+                System.Diagnostics.Debug.Assert(false, "TODO for XB1.");
+                return null;
+            }
+#endif // XB1
         }
 
         readonly Sync<SyncRotationAndElevation> m_rotationAndElevationSync;
@@ -572,6 +603,15 @@ namespace Sandbox.Game.Weapons
         public MyLargeTurretBase()
             : base()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_shootingRange = SyncType.CreateAndAddProp<float>();
+            m_enableIdleRotation = SyncType.CreateAndAddProp<bool>();
+            m_rotationAndElevationSync = SyncType.CreateAndAddProp<SyncRotationAndElevation>();
+            m_targetSync = SyncType.CreateAndAddProp<CurrentTargetSync>();
+            m_targetFlags = SyncType.CreateAndAddProp<MyTurretTargetFlags>();
+#endif // XB1
+            CreateTerminalControls();
+
             m_status = MyLargeShipGunStatus.MyWeaponStatus_Deactivated;
             m_randomStandbyChange_ms = MySandboxGame.TotalGamePlayTimeInMilliseconds;
             m_randomStandbyChangeConst_ms = MyUtils.GetRandomInt(3500, 4500);
@@ -597,17 +637,25 @@ namespace Sandbox.Game.Weapons
 
             ControllerInfo.ControlReleased += OnControlReleased;
 
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_gunBase = new MyGunBase(SyncType);
+#else // !XB1
             m_gunBase = new MyGunBase();
+#endif // !XB1
             m_outOfAmmoNotification = new MyHudNotification(MyCommonTexts.OutOfAmmo, 1000, level: MyNotificationLevel.Important);
 
             NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.BEFORE_NEXT_FRAME | MyEntityUpdateEnum.EACH_10TH_FRAME;
 
+#if !XB1 // XB1_SYNC_NOREFLECTION
             SyncType.Append(m_gunBase);
+#endif // !XB1
 
             m_shootingRange.ValueChanged += (x) => ShootingRangeChanged();
             m_rotationAndElevationSync.ValueChanged += (x) => RotationAndElevationSync();
             m_targetSync.ValidateNever();
             m_targetSync.ValueChanged +=  (x) => TargetChanged();
+
+            m_toolbar = new MyToolbar(ToolbarType);
         }
 
         void TargetChanged()
@@ -734,6 +782,7 @@ namespace Sandbox.Game.Weapons
             m_enableIdleRotation.Value &= builder.EnableIdleRotation;
 
             m_previousIdleRotationState = builder.PreviousIdleRotationState;
+
         }
 
         float NormalizeAngle(int angle)
@@ -1050,7 +1099,7 @@ namespace Sandbox.Game.Weapons
             if (targetDistance < m_searchingRange || m_currentPrediction.ManualTargetPosition)
             {
                 //by Gregory RotationAndElevation uses target! maybe shouldn't?
-                bool isAimed = Target != null && RotationAndElevation() && CanShoot(out gunStatus) && IsTargetVisible(Target);
+                bool isAimed = (Target != null || m_currentPrediction.ManualTargetPosition) && RotationAndElevation() && CanShoot(out gunStatus) && IsTargetVisible(Target);
                 UpdateShooting(isAimed && !m_isPotentialTarget);
             }
             else
@@ -1099,6 +1148,8 @@ namespace Sandbox.Game.Weapons
 
         private void Deactivate()
         {
+            CreateTerminalControls();
+
             m_status = MyLargeShipGunStatus.MyWeaponStatus_Deactivated;
             if (m_soundEmitter == null)
                 return;
@@ -1673,7 +1724,10 @@ namespace Sandbox.Game.Weapons
 
         public bool IsShooting
         {
-            get { return false; }
+            get
+            {
+                return m_isShooting.Value;
+            }
         }
 
         int IMyGunObject<MyGunBase>.ShootDirectionUpdateTime
@@ -1734,7 +1788,7 @@ namespace Sandbox.Game.Weapons
         {
             if (entity is Sandbox.Game.Entities.Debris.MyDebrisBase)
                 return false;
-            if (!TargetCharacters && entity is MyCharacter)
+            if (!TargetCharacters && (entity is MyCharacter||entity is MyGhostCharacter))
                 return false;
 
             if (!TargetMeteors && entity is MyMeteor)
@@ -1753,7 +1807,17 @@ namespace Sandbox.Game.Weapons
 
             bool sameParent = false;
             if (topMostParent is MyCubeGrid)
-                sameParent = ((MyCubeGrid)this.GetTopMostParent()).GridSystems.TerminalSystem == ((MyCubeGrid)topMostParent).GridSystems.TerminalSystem;
+            {
+                var thisGrid = (MyCubeGrid)this.GetTopMostParent();
+                var otherGrid = (MyCubeGrid)topMostParent;
+                sameParent = thisGrid.GridSystems.TerminalSystem == otherGrid.GridSystems.TerminalSystem;
+                
+                //Also check if grids are logically connected (mostly for not detecting Pistons and Rotors as seperate grid). Maybe need to check all adjusent grids?
+                //Haven't taken into account Big Owners. If causing bug then change
+                if (MyCubeGridGroups.Static.Logical.HasSameGroup(thisGrid, otherGrid))
+                    return false;
+            }
+                
 
             bool isMyShip = false;
             if (sameParent)
@@ -1794,7 +1858,7 @@ namespace Sandbox.Game.Weapons
                 if (entity is MyDecoy)
                     return true;
 
-                if (TargetCharacters && entity is MyCharacter && !(entity as MyCharacter).IsDead)
+                if (TargetCharacters && (entity is MyGhostCharacter || entity is MyCharacter && !(entity as MyCharacter).IsDead))
                     return true;
 
                 if (TargetMeteors && entity is MyMeteor)
@@ -1830,7 +1894,7 @@ namespace Sandbox.Game.Weapons
                 to = to + Vector3.Transform(target.Physics.Center, target.WorldMatrix.GetOrientation());
             }
 
-            VRage.ProfilerShort.Begin("RayCast");
+            ProfilerShort.Begin("RayCast");
 
             var physTarget = MyPhysics.CastRay(from, to, MyPhysics.CollisionLayers.DefaultCollisionLayer);
             //MyPhysics.HitInfo? physTarget = null;
@@ -1838,7 +1902,7 @@ namespace Sandbox.Game.Weapons
             //    physTarget = MyPhysics.CastLongRay(from, to);
             //else
             //    physTarget = MyPhysics.CastRay(from, to, MyPhysics.CollisionLayers.DefaultCollisionLayer);
-            VRage.ProfilerShort.End();
+            ProfilerShort.End();
             IMyEntity hitEntity = null;
 
             if (physTarget.HasValue)
@@ -1885,14 +1949,15 @@ namespace Sandbox.Game.Weapons
 
             MyEntity nearestTarget = null;
             double minDistanceSq = range * range;// double.MaxValue;
-            VRage.ProfilerShort.Begin("FindNearest");
+            ProfilerShort.Begin("FindNearest");
 
             bool foundDecoy = false;
             foreach (var target in targetList)
             {
                 TestTarget(target, onlyPotential, ref nearestTarget, ref minDistanceSq, ref foundDecoy);
             }
-            VRage.ProfilerShort.End(targetList.Count);
+
+            ProfilerShort.End(targetList.Count);
             return nearestTarget;
         }
 
@@ -1902,12 +1967,15 @@ namespace Sandbox.Game.Weapons
                 return;
 
             var grid = target as MyCubeGrid;
+            bool isDecoy = IsDecoy(target);
+            double dist;
             if (grid != null)
             {
                 if (grid.GridSystems.TerminalSystem == this.CubeGrid.GridSystems.TerminalSystem && grid.BigOwners.Contains(this.OwnerId))
                     return; // Me
 
-                if(grid.PositionComp.WorldAABB.DistanceSquared(PositionComp.GetPosition()) > minDistanceSq)
+                dist = grid.PositionComp.WorldAABB.DistanceSquared(PositionComp.GetPosition());
+                if ((dist >= minDistanceSq && foundDecoy))
                     return; //none block closer than nearest target
 
                 var blockList = CubeGrid.Components.Get<MyGridTargeting>().TargetBlocks.GetList(grid);
@@ -1930,13 +1998,15 @@ namespace Sandbox.Game.Weapons
                 }
             }
 
-            bool isDecoy = IsDecoy(target);
+            
             if (foundDecoy && !isDecoy) //found decoy search only for closer decoy
                 return;
-            var dist = Vector3D.DistanceSquared(target.PositionComp.GetPosition(), PositionComp.GetPosition());
+            dist = Vector3D.DistanceSquared(target.PositionComp.GetPosition(), PositionComp.GetPosition());
 
             //we have closer target;
-            if (dist >= minDistanceSq)
+            //if block is further away but is decoy and decoy is not found yet this block have to pass
+            if ((dist >= minDistanceSq && (!isDecoy || foundDecoy)) || (!isDecoy && foundDecoy))
+            //if (dist >= minDistanceSq)
                 return;
 
             //only check targets
@@ -1982,9 +2052,9 @@ namespace Sandbox.Game.Weapons
 
         private bool IsTargetInView(MyEntity target, Vector3D predPos)
         {
-            VRage.ProfilerShort.Begin("InView");
+            ProfilerShort.Begin("InView");
             //var predPos = m_currentPrediction.GetPredictedTargetPosition(target);
-            VRage.ProfilerShort.End();
+            ProfilerShort.End();
             var lookAtPositionEuler = LookAt(predPos);
             float needElevation = lookAtPositionEuler.X;
 
@@ -2040,9 +2110,9 @@ namespace Sandbox.Game.Weapons
                 return true;
             }
 
-            if (target is MyCharacter)
+            if (target is MyCharacter || target is MyGhostCharacter)
             {
-                var controller = (target as MyCharacter).ControllerInfo.Controller;
+                var controller = (target as IMyControllableEntity).ControllerInfo.Controller;
                 if (controller == null)
                     return false;
 
@@ -2065,11 +2135,13 @@ namespace Sandbox.Game.Weapons
 
             MyEntity nearestTarget = null;
             float targetRange = 0;
+            //GetNearestVisibleTarget(m_searchingRange, true);//TODO smaz radek
             if (Target != null)
             {
 
                 targetRange = (float)GetTargetDistance();
-                if (targetRange >= m_searchingRange)
+                //GR: if in range and not enemy then this is no target (may happen if entiy is in range and have changed faction)
+                if (targetRange >= m_searchingRange || !IsTargetEnemy(Target))
                 {
                     nearestTarget = GetNearestVisibleTarget(m_searchingRange, true);
                 }
@@ -2110,12 +2182,7 @@ namespace Sandbox.Game.Weapons
 
             //nearestTarget = GetNearestVisibleTarget(m_shootingRange, false);
             //m_isPotentialTarget = false;
-
-            if (m_isPotentialTarget != oldPotentialState && nearestTarget == Target)
-            {
-                Target = null;
-            }
-
+            
             if (MyFakes.FakeTarget != null && IsTargetVisible(MyFakes.FakeTarget, MyFakes.FakeTarget.WorldMatrix.Translation))
             {
                 Target = MyFakes.FakeTarget;
@@ -2123,6 +2190,11 @@ namespace Sandbox.Game.Weapons
             else
             {
                 Target = nearestTarget;
+            }
+
+            if (nearestTarget == Target && m_isPotentialTarget != oldPotentialState)
+            {
+                Target = null;
             }
 
             VRageRender.MyRenderProxy.GetRenderProfiler().EndProfilingBlock();
@@ -2237,9 +2309,11 @@ namespace Sandbox.Game.Weapons
 
         #region Control panel
 
-
-        static MyLargeTurretBase()
+        static void CreateTerminalControls()
         {
+            if (MyTerminalControlFactory.AreControlsCreated<MyLargeTurretBase>())
+                return;
+
             if (MyFakes.ENABLE_TURRET_CONTROL)
             {
                 var controlBtn = new MyTerminalControlButton<MyLargeTurretBase>("Control", MySpaceTexts.ControlRemote, MySpaceTexts.Blank, (t) => t.RequestControl());
@@ -2552,7 +2626,8 @@ namespace Sandbox.Game.Weapons
             {
                 MyGuiScreenTerminal.Hide();
             }
-            MyCubeBuilder.Static.Deactivate();
+            //MyCubeBuilder.Static.Deactivate();
+            MySession.Static.GameFocusManager.Clear();
 
             MyMultiplayer.RaiseEvent(this,x => x.RequestUseMessage, UseActionEnum.Manipulate,MySession.Static.ControlledEntity.Entity.EntityId);
         }
@@ -3172,7 +3247,11 @@ namespace Sandbox.Game.Weapons
 
         public void DrawHud(IMyCameraController camera, long playerId)
         {
-            MyGuiScreenHudSpace.Static.SetToolbarVisible(!m_hidetoolbar);
+            if (MyGuiScreenHudSpace.Static != null)
+            {
+                //Do not show toolbar component at all if in turret
+                MyGuiScreenHudSpace.Static.SetToolbarVisible(false);
+        }
         }
 
         public void SwitchReactors()
@@ -3197,6 +3276,15 @@ namespace Sandbox.Game.Weapons
                 return MyToolbarType.LargeCockpit;
             }
         }
+
+        public MyToolbar Toolbar
+        {
+            get
+            {
+                return m_toolbar;
+            }
+        }
+
         #endregion
 
         #endregion
@@ -3316,6 +3404,16 @@ namespace Sandbox.Game.Weapons
         MyInventory IMyGunBaseUser.AmmoInventory
         {
             get { return this.GetInventory(); }
+        }
+
+        MyDefinitionId IMyGunBaseUser.PhysicalItemId
+        {
+            get { return new MyDefinitionId(); }
+        }
+
+        MyInventory IMyGunBaseUser.WeaponInventory
+        {
+            get { return null; }
         }
 
         long IMyGunBaseUser.OwnerId
@@ -3550,6 +3648,12 @@ namespace Sandbox.Game.Weapons
         void IMyControllableEntity.Teleport(Vector3D pos)
         {
 
+        }
+
+        public void UpdateSoundEmitter()
+        {
+            if (m_soundEmitter != null)
+                m_soundEmitter.Update();
         }
     }
 

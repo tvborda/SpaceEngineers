@@ -241,6 +241,7 @@ namespace VRage.Game.ModAPI
         event Action<IMySlimBlock> OnBlockAdded;
         event Action<IMySlimBlock> OnBlockRemoved;
         event Action<IMyCubeGrid> OnBlockOwnershipChanged;
+        event Action<IMyCubeGrid> OnGridChanged;
 
         void UpdateOwnership(long ownerId, bool isFunctional);
         VRageMath.Vector3I WorldToGridInteger(VRageMath.Vector3D coords);
@@ -252,6 +253,13 @@ namespace VRage.Game.ModAPI
         /// <param name="testMerge">test for grid merging</param>
         /// <returns></returns>
         IMySlimBlock AddBlock(MyObjectBuilder_CubeBlock objectBuilder, bool testMerge);
+
+        /// <summary>
+        /// Checks if removing a block will cause the grid to split
+        /// </summary>
+        /// <param name="testBlock"></param>
+        /// <returns></returns>
+        bool WillRemoveBlockSplitGrid(IMySlimBlock testBlock);
 
         //Missing dependencies
         //void BuildBlocks(long buildBy, ref IMyCubeGrid.MyBlockBuildArea area);
@@ -280,5 +288,17 @@ namespace VRage.Game.ModAPI
         //bool CanMergeCubes(IMyCubeGrid gridToMerge, VRageMath.Vector3I gridOffset);
         //void DebugDrawPositions(System.Collections.Generic.List<VRageMath.Vector3I> positions);
         //void DebugDrawRange(VRageMath.Vector3I min, VRageMath.Vector3I max);
+    }
+
+    /// <summary>
+    /// Types of block integrity change that can occur
+    /// </summary>
+    public enum MyIntegrityChangeEnum
+    {
+        Damage,
+        ConstructionBegin,
+        ConstructionEnd,
+        ConstructionProcess,
+        Repair
     }
 }

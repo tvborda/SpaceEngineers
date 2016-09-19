@@ -1,32 +1,39 @@
-﻿using SharpDX.Direct3D11;
+﻿using SharpDX.DXGI;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
-using System.Text;
+using System.Runtime.InteropServices;
 using VRage.Library.Utils;
+using VRage.Render11.Common;
+using VRage.Render11.Resources;
 using VRage.Voxels;
 using VRageMath;
-using VRageRender.Resources;
+using VRageRender.Voxels;
 
 namespace VRageRender
 {
+    [StructLayout(LayoutKind.Sequential)]
     public struct MyTextureDebugMultipliers
     {
-        public float RgbMultiplier;
+        public float AlbedoMultiplier;
         public float MetalnessMultiplier;
         public float GlossMultiplier;
         public float AoMultiplier;
 
         public float EmissiveMultiplier;
         public float ColorMaskMultiplier;
-        public float __padding1;
-        public float __padding2;
+        public float AlbedoShift;
+        public float MetalnessShift;
+
+        public float GlossShift;
+        public float AoShift;
+        public float EmissiveShift;
+        public float ColorMaskShift;
 
         public static MyTextureDebugMultipliers Defaults = new MyTextureDebugMultipliers
         {
-            RgbMultiplier = 1.0f,
+            AlbedoMultiplier = 1.0f,
             MetalnessMultiplier = 1.0f,
             GlossMultiplier = 1.0f,
             AoMultiplier = 1.0f,
@@ -55,8 +62,6 @@ namespace VRageRender
             // lighting
         internal const int SKYBOX_SLOT = 10;
         internal const int SKYBOX_IBL_SLOT = 11;
-        internal const int SKYBOX2_SLOT = 17;
-        internal const int SKYBOX2_IBL_SLOT = 18;
         internal const int AO_SLOT = 12;
         internal const int POINTLIGHT_SLOT = 13;
         internal const int TILE_LIGHT_INDICES_SLOT = 14;
@@ -69,6 +74,12 @@ namespace VRageRender
         // samplers
         internal const int SHADOW_SAMPLER_SLOT = 15;
 
+        const float MAX_FRAMETIME = 66.0f;
+        const int DEFAULT_SEED = 0x4A6F7921;
+
+        internal static ConstantsBufferId FrameConstantsStereoLeftEye { get; set; }
+        internal static ConstantsBufferId FrameConstantsStereoRightEye { get; set; }
+        
         internal static ConstantsBufferId FrameConstants { get; set; }
         internal static ConstantsBufferId ProjectionConstants { get; set; }
         internal static ConstantsBufferId ObjectConstants { get; set; }
@@ -84,8 +95,11 @@ namespace VRageRender
             m_timer = new Stopwatch();
             m_timer.Start();
         }
-        internal unsafe static void Init()
+        internal static unsafe void Init()
         {
+            FrameConstantsStereoLeftEye = MyHwBuffers.CreateConstantsBuffer(sizeof(MyFrameConstantsLayout), "FrameConstantsStereoLeftEye");
+            FrameConstantsStereoRightEye = MyHwBuffers.CreateConstantsBuffer(sizeof(MyFrameConstantsLayout), "FrameConstantsStereoRightEye");
+
             FrameConstants = MyHwBuffers.CreateConstantsBuffer(sizeof(MyFrameConstantsLayout), "FrameConstants");
             ProjectionConstants = MyHwBuffers.CreateConstantsBuffer(sizeof(Matrix), "ProjectionConstants");
             ObjectConstants = MyHwBuffers.CreateConstantsBuffer(sizeof(Matrix), "ObjectConstants");
@@ -97,9 +111,10 @@ namespace VRageRender
             UpdateAlphamaskViewsConstants();
         }
 
-        internal static ShaderResourceView GetAmbientBrdfLut()
+        internal static ISrvBindable GetAmbientBrdfLut()
         {
-            return MyTextures.GetView(MyTextures.GetTexture("Textures/Miscellaneous/ambient_brdf.dds", MyTextureEnum.CUSTOM, true));
+            MyFileTextureManager texManager = MyManagers.FileTextures;
+            return texManager.GetTexture("Textures/Miscellaneous/ambient_brdf.dds", MyFileTextureEnum.CUSTOM, true);
         }
 
         internal static Dictionary<int, ConstantsBufferId> m_objectsConstantBuffers = new Dictionary<int, ConstantsBufferId>();
@@ -130,6 +145,7 @@ namespace VRageRender
             return m_materialsConstantBuffers[size];
         }
 
+        [StructLayout(LayoutKind.Sequential)]
         struct MyFrameConstantsLayout
         {
             internal Matrix ViewProjection;
@@ -141,9 +157,15 @@ namespace VRageRender
             internal Matrix ViewProjectionWorld;
             internal Vector4 WorldOffset;
 
+            internal Vector3 EyeOffsetInWorld;
+            internal float  _Padding1;
+
+            internal Vector2I GBufferOffset;
+            internal Vector2I ResolutionOfGBuffer;
+
             internal Vector2 Resolution;
-            internal float Time;
-            internal float TimeDelta;
+            internal float FrameTime;
+            internal float FrameTimeDelta;
 
             internal Vector4 TerrainTextureDistances;
 
@@ -152,56 +174,18 @@ namespace VRageRender
             internal uint TilesX;
 
             internal Vector4 FoliageClippingScaling;
+
             internal Vector3 WindVector;
-            internal float Tau;
+            internal float DebugVoxelLod;
 
-            internal float BacklightMult;
-            internal float EnvMult;
-            internal float Contrast;
-            internal float Brightness;
-
-            internal float MiddleGrey;
-            internal float LuminanceExposure;
-            internal float BloomExposure;
-            internal float BloomMult;
-
-            internal float MiddleGreyCurveSharpness;
-            internal float MiddleGreyAt0;
-            internal float BlueShiftRapidness;
-            internal float BlueShiftScale;
+            internal MyEnvironmentLightData EnvironmentLight;
+            internal MyPostprocessSettings.Layout Postprocess;
 
             internal float FogDensity;
             internal float FogMult;
-            internal float FogYOffset;
-            internal uint FogColor;
+            internal uint FogColor;             // sRGB
+            internal float RandomSeed;
 
-            internal Vector3 DirectionalLightDir;
-            internal float SkyboxBlend;
-
-            internal Vector3 DirectionalLightColor;
-            internal float ForwardPassAmbient;
-
-            internal Vector3 AdditionalSunColor;
-            internal float AdditionalSunIntensity;
-
-            internal Vector4 SecondarySunDirection1;
-            internal Vector4 SecondarySunDirection2;
-            internal Vector4 SecondarySunDirection3;
-            internal Vector4 SecondarySunDirection4;
-            internal Vector4 SecondarySunDirection5;
-            internal int AdditionalSunCount;
-            internal Vector3 _Padding1;
-
-            internal float Tonemapping_A;
-            internal float Tonemapping_B;
-            internal float Tonemapping_C;
-            internal float Tonemapping_D;
-
-            internal float Tonemapping_E;
-            internal float Tonemapping_F;
-            internal float LogLumThreshold;
-            internal float DebugVoxelLod;
-            
             internal Vector4 VoxelLodRange0;
             internal Vector4 VoxelLodRange1;
             internal Vector4 VoxelLodRange2;
@@ -216,11 +200,6 @@ namespace VRageRender
             internal Vector4 VoxelMassiveLodRange6;
             internal Vector4 VoxelMassiveLodRange7;
 
-            internal float SkyboxBrightness;
-			internal float ShadowFadeout;
-            internal float FrameTimeDelta;
-            internal float RandomSeed;
-
             internal float EnableVoxelAo;
             internal float VoxelAoMin;
             internal float VoxelAoMax;
@@ -231,7 +210,8 @@ namespace VRageRender
             internal MyTextureDebugMultipliers TextureDebugMultipliers;
 
             internal Vector3 CameraPositionDelta;
-            internal float _Padding2;
+            internal float _pad0;
+            
         }
 
         internal static void MoveToNextFrame()
@@ -239,33 +219,72 @@ namespace VRageRender
             FrameCounter++;
         }
 
-        static int m_lastGameplayFrame;
-        static int m_lastFrameGameplayUpdate;
         static MyRandom m_random = new MyRandom();
-        const float MAX_FRAMETIME = 66.0f;
+        static uint m_fixedTimeStep;
         static float m_lastFrameDelta = 0;
-        static float m_lastFrameTime = 0;
-        static Stopwatch m_timer;
+        static float m_frameTime = 0;
+        static float m_lastFrameTimer = 0;
+        static readonly Stopwatch m_timer;
         static Vector3D m_lastCameraPosition;
 
         internal static float TimerMs { get { return (float)(m_timer.ElapsedTicks / (double)Stopwatch.Frequency * 1000.0); } }
         internal static float LastFrameDelta() { return m_lastFrameDelta; }
 
+        public static void SetFrameTimeStep(uint timestep)
+        {
+            if (timestep == 0 && m_fixedTimeStep > 0)
+            {
+                // Arbitrarily restore last timer value
+                m_lastFrameTimer = TimerMs - m_fixedTimeStep;
+            }
+
+            m_fixedTimeStep = timestep;
+        }
+
+        public static void SetRandomSeed(int? value)
+        {
+            int seed = value.HasValue ? value.Value : DEFAULT_SEED;
+
+            m_random.SetSeed(seed);
+            MyManagers.GeneratedTextures.InitializeRandomTexture(seed);
+            MyHBAO.InitializeConstantBuffer(seed);
+        }
+
+        private static void UpdateFrameConstantsInternal(MyEnvironmentMatrices envMatrices, ref MyFrameConstantsLayout constants, MyStereoRegion typeofFC)
+        {
+            constants.View = Matrix.Transpose(envMatrices.ViewAt0);
+            constants.Projection = Matrix.Transpose(envMatrices.Projection);
+            constants.ViewProjection = Matrix.Transpose(envMatrices.ViewProjectionAt0);
+            constants.InvView = Matrix.Transpose(envMatrices.InvViewAt0);
+            constants.InvProjection = Matrix.Transpose(envMatrices.InvProjection);
+            constants.InvViewProjection = Matrix.Transpose(envMatrices.InvViewProjectionAt0);
+            constants.ViewProjectionWorld = Matrix.Transpose(envMatrices.ViewProjection);
+            constants.WorldOffset = new Vector4(envMatrices.CameraPosition, 0);
+
+            constants.Resolution = MyRender11.ResolutionF;
+            if (typeofFC != MyStereoRegion.FULLSCREEN)
+            {
+                constants.Resolution.X /= 2;
+
+                Vector3 eyeOffset = new Vector3(envMatrices.ViewAt0.M41, envMatrices.ViewAt0.M42, envMatrices.ViewAt0.M43);
+                Vector3 eyeOffsetInWorld = Vector3.Transform(eyeOffset, Matrix.Transpose(MyRender11.Environment.Matrices.ViewAt0));
+                constants.EyeOffsetInWorld = eyeOffsetInWorld;
+            }
+
+            constants.GBufferOffset = new Vector2I(0, 0);
+            if (typeofFC == MyStereoRegion.RIGHT)
+                constants.GBufferOffset.X = MyRender11.ResolutionI.X / 2;
+
+            constants.ResolutionOfGBuffer = MyRender11.ResolutionI;
+        }
+
         internal static void UpdateFrameConstants()
         {
             MyFrameConstantsLayout constants = new MyFrameConstantsLayout();
-            constants.View = Matrix.Transpose(MyEnvironment.ViewAt0);
-            constants.Projection = Matrix.Transpose(MyEnvironment.Projection);
-            constants.ViewProjection = Matrix.Transpose(MyEnvironment.ViewProjectionAt0);
-            constants.InvView = Matrix.Transpose(MyEnvironment.InvViewAt0);
-            constants.InvProjection = Matrix.Transpose(MyEnvironment.InvProjection);
-            constants.InvViewProjection = Matrix.Transpose(MyEnvironment.InvViewProjectionAt0);
-            constants.ViewProjectionWorld = Matrix.Transpose(MyEnvironment.ViewProjection);
-            constants.WorldOffset = new Vector4(MyEnvironment.CameraPosition, 0);
+            UpdateFrameConstantsInternal(MyRender11.Environment.Matrices, ref constants, MyStereoRegion.FULLSCREEN);
+            constants.CameraPositionDelta = MyRender11.Environment.Matrices.CameraPosition - m_lastCameraPosition;
+            m_lastCameraPosition = MyRender11.Environment.Matrices.CameraPosition;
 
-            float skyboxBlend = 1 - 2 * (float)(Math.Abs(-MyEnvironment.DayTime + 0.5));
-            
-            constants.Resolution = MyRender11.ResolutionF;
             constants.TerrainTextureDistances = new Vector4(
                 MyRender11.Settings.TerrainDetailD0,
                 1.0f / (MyRender11.Settings.TerrainDetailD1 - MyRender11.Settings.TerrainDetailD0),
@@ -275,21 +294,23 @@ namespace VRageRender
             constants.TerrainDetailRange.X = 0;
             constants.TerrainDetailRange.Y = 0;
 
-            var currentGameplayFrame = MyRender11.Settings.GameplayFrame;
-            constants.Time = (float) (currentGameplayFrame) / 60.0f;
-            constants.TimeDelta = (float)(currentGameplayFrame - m_lastGameplayFrame) / 60.0f;
-
-            if ((int)FrameCounter != m_lastFrameGameplayUpdate)
+            if (m_fixedTimeStep > 0)
             {
-                m_lastGameplayFrame = currentGameplayFrame;
-                m_lastFrameGameplayUpdate = (int)FrameCounter;
+                m_frameTime = m_frameTime + m_fixedTimeStep;
+                m_lastFrameDelta = m_fixedTimeStep;
+            }
+            else
+            {
+                float timer = TimerMs;
+                float delta = Math.Min(timer - m_lastFrameTimer, MAX_FRAMETIME) / 1000.0f;
+                m_frameTime += delta;
+                m_lastFrameDelta = delta;
+                m_lastFrameTimer = timer;
             }
 
-            float time = TimerMs;
-            float delta = Math.Min(time - m_lastFrameTime, MAX_FRAMETIME);
-            m_lastFrameTime = time;
-            m_lastFrameDelta = delta / 1000.0f;
             constants.FrameTimeDelta = m_lastFrameDelta;
+            constants.FrameTime = m_frameTime;
+
             constants.RandomSeed = m_random.NextFloat();
 
             constants.FoliageClippingScaling = new Vector4(
@@ -303,106 +324,47 @@ namespace VRageRender
                 0, 
                 (float)Math.Sin(MyRender11.Settings.WindAzimuth * Math.PI / 180.0)) * MyRender11.Settings.WindStrength;
 
-            constants.Tau = MyRender11.Postprocess.EnableEyeAdaptation ? MyRender11.Postprocess.EyeAdaptationTau : 0;
-            constants.BacklightMult = MyRender11.Settings.BacklightMult;
-            constants.EnvMult = MyRender11.Settings.EnvMult;
-            constants.Contrast = MyRender11.Postprocess.Contrast;
-            constants.Brightness = MyRender11.Postprocess.Brightness;
-            constants.MiddleGrey = MyRender11.Postprocess.MiddleGrey;
-            constants.LuminanceExposure = MyRender11.Postprocess.LuminanceExposure;
-            constants.BloomExposure = MyRender11.Postprocess.BloomExposure;
-            constants.BloomMult = MyRender11.Postprocess.BloomMult;
-            constants.MiddleGreyCurveSharpness = MyRender11.Postprocess.MiddleGreyCurveSharpness;
-            constants.MiddleGreyAt0 = MyRender11.Postprocess.MiddleGreyAt0;
-            constants.BlueShiftRapidness = MyRender11.Postprocess.BlueShiftRapidness;
-            constants.BlueShiftScale = MyRender11.Postprocess.BlueShiftScale;
-            constants.FogDensity = MyEnvironment.FogSettings.FogDensity;
-            constants.FogMult = MyEnvironment.FogSettings.FogMultiplier;
-            constants.FogYOffset = MyRender11.Settings.FogYOffset;
-            constants.FogColor = MyEnvironment.FogSettings.FogColor.PackedValue;
-            constants.ForwardPassAmbient = MyRender11.Postprocess.ForwardPassAmbient;
-
-            constants.LogLumThreshold = MyRender11.Postprocess.LogLumThreshold + (MyRender11.Postprocess.LogLumThreshold + 2 - MyRender11.Postprocess.LogLumThreshold) * skyboxBlend;
-            constants.Tonemapping_A = MyRender11.Postprocess.Tonemapping_A;
-            constants.Tonemapping_B = MyRender11.Postprocess.Tonemapping_B;
-            constants.Tonemapping_C = MyRender11.Postprocess.Tonemapping_C;
-            constants.Tonemapping_D = MyRender11.Postprocess.Tonemapping_D;
-            constants.Tonemapping_E = MyRender11.Postprocess.Tonemapping_E;
-            constants.Tonemapping_F = MyRender11.Postprocess.Tonemapping_F;
-
-
-            //if (true)
-            //{
-            //    constants.Tau = MyRender11.Settings.AdaptationTau;
-            //    constants.BacklightMult = MyRender11.Settings.BacklightMult;
-            //    constants.EnvMult = MyRender11.Settings.EnvMult;
-            //    constants.Contrast = MyRender11.Settings.Contrast;
-            //    constants.Brightness = MyRender11.Settings.Brightness;
-            //    constants.MiddleGrey = MyRender11.Settings.MiddleGrey;
-            //    constants.LuminanceExposure = MyRender11.Settings.LuminanceExposure;
-            //    constants.BloomExposure = MyRender11.Settings.BloomExposure;
-            //    constants.BloomMult = MyRender11.Settings.BloomMult;
-            //    constants.MiddleGreyCurveSharpness = MyRender11.Settings.MiddleGreyCurveSharpness;
-            //    constants.MiddleGreyAt0 = MyRender11.Settings.MiddleGreyAt0;
-            //    constants.BlueShiftRapidness = MyRender11.Settings.BlueShiftRapidness;
-            //    constants.BlueShiftScale = MyRender11.Settings.BlueShiftScale;
-            //}
+            // postprocess
+            constants.Postprocess = MyRender11.Postprocess.GetProcessedData();
 
             constants.TilesNum = (uint)MyScreenDependants.TilesNum;
             constants.TilesX = (uint)MyScreenDependants.TilesX;
 
-            constants.DirectionalLightColor = MyEnvironment.DirectionalLightIntensity;
-            constants.DirectionalLightDir = MyEnvironment.DirectionalLightDir;
+            // lighting data
+            constants.EnvironmentLight = MyRender11.Environment.Data.EnvironmentLight;
+            if (!MyRender11.DebugOverrides.Sun)
+                constants.EnvironmentLight.SunColorRaw = new Vector3(0, 0, 0);
 
-            int lightIndex = 0;
-            if (MyEnvironment.AdditionalSunDirections != null && MyEnvironment.AdditionalSunDirections.Length > 0)
-            {
-                constants.AdditionalSunColor = MyEnvironment.AdditionalSunColors[0];
-                constants.AdditionalSunIntensity = MyEnvironment.AdditionalSunIntensities[0];
+            // fog
+            constants.FogDensity = MyRender11.Environment.Fog.FogDensity;
+            constants.FogMult = MyRender11.Environment.Fog.FogMultiplier;
+            constants.FogColor = MyRender11.Environment.Fog.FogColor.PackedValue;
 
-                if (lightIndex < MyEnvironment.AdditionalSunDirections.Length)
-                    constants.SecondarySunDirection1 = new Vector4(MathHelper.CalculateVectorOnSphere(MyEnvironment.DirectionalLightDir, MyEnvironment.AdditionalSunDirections[lightIndex][0], MyEnvironment.AdditionalSunDirections[lightIndex][1]), 0);
-                ++lightIndex;
-                if (lightIndex < MyEnvironment.AdditionalSunDirections.Length)
-                    constants.SecondarySunDirection2 = new Vector4(MathHelper.CalculateVectorOnSphere(MyEnvironment.DirectionalLightDir, MyEnvironment.AdditionalSunDirections[lightIndex][0], MyEnvironment.AdditionalSunDirections[lightIndex][1]), 0);
-                ++lightIndex;
-                if (lightIndex < MyEnvironment.AdditionalSunDirections.Length)
-                    constants.SecondarySunDirection3 = new Vector4(MathHelper.CalculateVectorOnSphere(MyEnvironment.DirectionalLightDir, MyEnvironment.AdditionalSunDirections[lightIndex][0], MyEnvironment.AdditionalSunDirections[lightIndex][1]), 0);
-                ++lightIndex;
-                if (lightIndex < MyEnvironment.AdditionalSunDirections.Length)
-                    constants.SecondarySunDirection4 = new Vector4(MathHelper.CalculateVectorOnSphere(MyEnvironment.DirectionalLightDir, MyEnvironment.AdditionalSunDirections[lightIndex][0], MyEnvironment.AdditionalSunDirections[lightIndex][1]), 0);
-                ++lightIndex;
-                if (lightIndex < MyEnvironment.AdditionalSunDirections.Length)
-                    constants.SecondarySunDirection5 = new Vector4(MathHelper.CalculateVectorOnSphere(MyEnvironment.DirectionalLightDir, MyEnvironment.AdditionalSunDirections[lightIndex][0], MyEnvironment.AdditionalSunDirections[lightIndex][1]), 0);
-                ++lightIndex;
-                constants.AdditionalSunCount = MyEnvironment.AdditionalSunDirections.Length;
-            }
-            else
-                constants.AdditionalSunCount = 0;
+            // skybox
+            constants.BackgroundOrientation = Matrix.CreateFromQuaternion(MyRender11.Environment.Data.SkyboxOrientation);
 
-            constants.SkyboxBlend = skyboxBlend;
-            constants.SkyboxBrightness = MathHelper.Lerp(1.0f, 0.01f, MyEnvironment.PlanetFactor);
-			constants.ShadowFadeout = MyRender11.Settings.ShadowFadeoutMultiplier;
+            // voxels
+            constants.DebugVoxelLod = MyRender11.Settings.DebugClipmapLodColor ? 1.0f : 0.0f;
+            constants.EnableVoxelAo = MyRender11.Settings.EnableVoxelAo ? 1f : 0f;
+            constants.VoxelAoMin = MyRender11.Settings.VoxelAoMin;
+            constants.VoxelAoMax = MyRender11.Settings.VoxelAoMax;
+            constants.VoxelAoOffset = MyRender11.Settings.VoxelAoOffset;
 
-            constants.DebugVoxelLod = MyRenderSettings.DebugClipmapLodColor ? 1.0f : 0.0f;
-            constants.EnableVoxelAo = MyRenderSettings.EnableVoxelAo ? 1f : 0f;
-            constants.VoxelAoMin = MyRenderSettings.VoxelAoMin;
-            constants.VoxelAoMax = MyRenderSettings.VoxelAoMax;
-            constants.VoxelAoOffset = MyRenderSettings.VoxelAoOffset;
-
-            constants.BackgroundOrientation = Matrix.CreateFromQuaternion(MyEnvironment.BackgroundOrientation);
-
-            constants.CameraPositionDelta = MyEnvironment.CameraPosition - m_lastCameraPosition;
-            m_lastCameraPosition = MyEnvironment.CameraPosition;
-
+            // debug multipliers
             constants.TextureDebugMultipliers = new MyTextureDebugMultipliers
             {
-                RgbMultiplier = MyRender11.Settings.RgbMultiplier,
+                AlbedoMultiplier = MyRender11.Settings.AlbedoMultiplier,
+                AlbedoShift = MyRender11.Settings.AlbedoShift,
                 MetalnessMultiplier = MyRender11.Settings.MetalnessMultiplier,
+                MetalnessShift = MyRender11.Settings.MetalnessShift,
                 GlossMultiplier = MyRender11.Settings.GlossMultiplier,
+                GlossShift = MyRender11.Settings.GlossShift,
                 AoMultiplier = MyRender11.Settings.AoMultiplier,
+                AoShift = MyRender11.Settings.AoShift,
                 EmissiveMultiplier = MyRender11.Settings.EmissiveMultiplier,
+                EmissiveShift = MyRender11.Settings.EmissiveShift,
                 ColorMaskMultiplier = MyRender11.Settings.ColorMaskMultiplier,
+                ColorMaskShift = MyRender11.Settings.ColorMaskShift,
             };
 
             MyClipmap.ComputeLodViewBounds(MyClipmapScaleEnum.Normal, 0, out constants.VoxelLodRange0.X, out constants.VoxelLodRange0.Y);
@@ -435,11 +397,23 @@ namespace VRageRender
             MyClipmap.ComputeLodViewBounds(MyClipmapScaleEnum.Massive, 13, out constants.VoxelMassiveLodRange6.Z, out constants.VoxelMassiveLodRange6.W);
             MyClipmap.ComputeLodViewBounds(MyClipmapScaleEnum.Massive, 14, out constants.VoxelMassiveLodRange7.X, out constants.VoxelMassiveLodRange7.Y);
             MyClipmap.ComputeLodViewBounds(MyClipmapScaleEnum.Massive, 15, out constants.VoxelMassiveLodRange7.Z, out constants.VoxelMassiveLodRange7.W);
-            
 
             var mapping = MyMapping.MapDiscard(MyCommon.FrameConstants);
             mapping.WriteAndPosition(ref constants);
             mapping.Unmap();
+
+            if (MyStereoRender.Enable)
+            {
+                UpdateFrameConstantsInternal(MyStereoRender.EnvMatricesLeftEye, ref constants, MyStereoRegion.LEFT);
+                mapping = MyMapping.MapDiscard(MyCommon.FrameConstantsStereoLeftEye);
+                mapping.WriteAndPosition(ref constants);
+                mapping.Unmap();
+
+                UpdateFrameConstantsInternal(MyStereoRender.EnvMatricesRightEye, ref constants, MyStereoRegion.RIGHT);
+                mapping = MyMapping.MapDiscard(MyCommon.FrameConstantsStereoRightEye);
+                mapping.WriteAndPosition(ref constants);
+                mapping.Unmap();
+            }
         }
 
 

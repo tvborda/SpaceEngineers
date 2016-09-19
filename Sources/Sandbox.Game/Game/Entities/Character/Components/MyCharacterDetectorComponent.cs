@@ -49,7 +49,7 @@ using IMyModdingControllableEntity = VRage.Game.ModAPI.Interfaces.IMyControllabl
 using VRage.Game.Entity;
 using VRage.Import;
 using VRage.Game.Models;
-using VRage.Render.Models;
+using VRageRender.Import;
 
 #endregion
 
@@ -117,14 +117,14 @@ namespace Sandbox.Game.Entities.Character
 
         public IMyEntity DetectedEntity
         {
-            protected set 
-            { 
+            protected set
+            {
                 if (m_detectedEntity != null)
                 {
                     m_detectedEntity.OnMarkForClose -= OnDetectedEntityMarkForClose;
                 }
 
-                m_detectedEntity = value; 
+                m_detectedEntity = value;
 
                 if (m_detectedEntity != null)
                 {
@@ -145,6 +145,10 @@ namespace Sandbox.Game.Entities.Character
         public MyStringHash HitMaterial { protected set; get; }
 
         public HkRigidBody HitBody { protected set; get; }
+
+        public object HitTag { get; protected set; }
+
+        protected MyCharacterHitInfo CharHitInfo;
 
         protected virtual void OnDetectedEntityMarkForClose(IMyEntity obj)
         {
@@ -226,11 +230,11 @@ namespace Sandbox.Game.Entities.Character
             base.OnCharacterDead();
 
             InteractiveObjectRemoved();
-		}
+        }
 
         public override void OnAddedToContainer()
         {
-            base.OnAddedToContainer();            
+            base.OnAddedToContainer();
             NeedsUpdateAfterSimulation10 = true;
         }
 
@@ -250,8 +254,21 @@ namespace Sandbox.Game.Entities.Character
         protected void EnableDetectorsInArea(Vector3D from)
         {
             GatherDetectorsInArea(from);
-            foreach (var ent in m_detectableEntities)
+            for (int i = 0; i < m_detectableEntities.Count; ++i)
             {
+                var ent = m_detectableEntities[i];
+                MyCompoundCubeBlock comp = ent as MyCompoundCubeBlock;
+                if (comp != null)
+                {
+                    foreach (var block in comp.GetBlocks())
+                    {
+                        if (block.FatBlock != null)
+                        {
+                            m_detectableEntities.Add(block.FatBlock);
+                        }
+                    }
+                }
+
                 MyUseObjectsComponentBase use;
                 if (ent.Components.TryGet<MyUseObjectsComponentBase>(out use))
                 {
@@ -282,10 +299,10 @@ namespace Sandbox.Game.Entities.Character
         {
             if (MyFakes.ENABLE_USE_NEW_OBJECT_HIGHLIGHT)
             {
-                if (interactive is MyFloatingObject)
+                if (interactive is MyFloatingObject || interactive.InstanceID != -1)
                 {
                     MyHud.SelectedObjectHighlight.HighlightAttribute = null;
-                    MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.HighlightStyle2;
+                    MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.OutlineHighlight;
                 }
                 else
                 {
@@ -299,21 +316,21 @@ namespace Sandbox.Game.Entities.Character
                         if (found && highlightAttribute != null)
                         {
                             MyHud.SelectedObjectHighlight.HighlightAttribute = highlightAttribute;
-                            MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.HighlightStyle2;
+                            MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.OutlineHighlight;
                         }
                     }
 
                     if (!found)
                     {
                         MyHud.SelectedObjectHighlight.HighlightAttribute = null;
-                        MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.HighlightStyle1;
+                        MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.DummyHighlight;
                     }
                 }
             }
             else
             {
                 MyHud.SelectedObjectHighlight.HighlightAttribute = null;
-                MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.HighlightStyle1;
+                MyHud.SelectedObjectHighlight.HighlightStyle = MyHudObjectHighlightStyle.DummyHighlight;
             }
 
             MyHud.SelectedObjectHighlight.Highlight(interactive);

@@ -5,7 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Xml;
 using System.Linq;
-using VRage.Animations;
+using VRageRender.Animations;
 using VRage.FileSystem;
 using VRage.Utils;
 using VRage.Win32;
@@ -21,60 +21,54 @@ namespace VRage.Game
         static readonly int Version = 0;
         static string m_loadedFile;
 
+        public static string DefaultLibrary = "Particles\\MyParticlesLibrary.mwl";
+
         public static string LoadedFile
         {
             get { return m_loadedFile; }
         }
 
-        static MyParticlesLibrary()
-        {
-            MyLog.Default.WriteLine("MyParticlesLibrary.ctor - START");
-            InitDefault();
-            MyLog.Default.WriteLine("MyParticlesLibrary.ctor - END");
-        }
-
         public static void InitDefault()
         {
-            try
+            /*try
             {
-                Deserialize("Particles\\MyParticlesLibrary.mwl");
+                Deserialize(DefaultLibrary);
             }
             catch (Exception e)
             {
                 MyLog.Default.WriteLine("ERROR: Loading of particles library failed: " + e.ToString());
-            }
-
-            /*
-            MyParticleEffect effect = MyParticlesManager.EffectsPool.Allocate();
-            effect.Start(666);
-
-            m_libraryEffects.Add(effect.GetID(), effect);
-            
-            MyParticleGeneration generation = MyParticlesManager.GenerationsPool.Allocate();
-            generation.Start(effect);
-            generation.Init();
-            generation.InitDefault();
-            effect.AddGeneration(generation);*/
+            }*/
         }
 
         public static void AddParticleEffect(MyParticleEffect effect)
         {
+            MyParticleEffect oldEffect;
+            if (m_libraryEffectsString.TryGetValue(effect.Name, out oldEffect) || m_libraryEffects.TryGetValue(effect.ID, out oldEffect))
+                return; //We dont want replace effects if they may be shown in editor
+                //RemoveParticleEffect(oldEffect.ID);
+
             m_libraryEffects.Add(effect.GetID(), effect);
             m_libraryEffectsString[effect.Name] = effect;
         }
 
         public static bool EffectExists(int ID)
         {
+            if (LoadedFile == null)
+                InitDefault();
             return m_libraryEffects.ContainsKey(ID);
         }
 
         public static MyParticleEffect GetParticleEffect(int particleEffectID)
         {
+            if (LoadedFile == null)
+                InitDefault();
             return m_libraryEffects[particleEffectID];
         }
 
         public static void UpdateParticleEffectID(int ID)
         {
+            if (LoadedFile == null)
+                InitDefault();
             MyParticleEffect effect;
             m_libraryEffects.TryGetValue(ID, out effect);
             if (effect != null)
@@ -104,18 +98,31 @@ namespace VRage.Game
             RemoveParticleEffect(effect.GetID());
         }
 
-        public static IEnumerable<MyParticleEffect> GetParticleEffects()
+        public static IReadOnlyDictionary<int, MyParticleEffect> GetParticleEffects()
         {
-            return m_libraryEffects.Values;
+            if (LoadedFile == null)
+                InitDefault();
+            return m_libraryEffects;
+        }
+
+        public static IReadOnlyDictionary<string, MyParticleEffect> GetParticleEffectsByName()
+        {
+            if (LoadedFile == null)
+                InitDefault();
+            return m_libraryEffectsString;
         }
 
         public static IEnumerable<int> GetParticleEffectsIDs()
         {
+            if (LoadedFile == null)
+                InitDefault();
             return m_libraryEffects.Keys;
         }
 
         public static bool GetParticleEffectsID(string name, out int id)
         {
+            if (LoadedFile == null)
+                InitDefault();
             MyParticleEffect effect;
             if (m_libraryEffectsString.TryGetValue(name, out effect))
             {
@@ -170,7 +177,11 @@ namespace VRage.Game
             {
                 MyLog.Default.WriteLine("ERROR: Failed to load particles library.");
                 MyLog.Default.WriteLine(ex);
+#if !XB1
                 WinApi.MessageBox(new IntPtr(), ex.Message, "Loading Error", 0);
+#else // XB1
+                System.Diagnostics.Debug.Assert(false, "Particles loading Error");
+#endif // XB1
                 throw;
             }
         }
@@ -178,9 +189,10 @@ namespace VRage.Game
 
         static public void Serialize(XmlWriter writer)
         {
-            writer.WriteStartElement("VRageParticleLibrary");
+            writer.WriteStartElement("Definitions");
 
-            writer.WriteElementString("Version", Version.ToString(CultureInfo.InvariantCulture));
+            writer.WriteAttributeString("xmlns", "xsi", null, "http://www.w3.org/2001/XMLSchema-instance");
+            writer.WriteAttributeString("xmlns", "xsd", null, "http://www.w3.org/2001/XMLSchema");
 
             writer.WriteStartElement("ParticleEffects");
 
@@ -191,10 +203,10 @@ namespace VRage.Game
 
             writer.WriteEndElement(); //ParticleEffects
 
-            writer.WriteEndElement(); //root
+            writer.WriteEndElement(); //Definitions
         }
 
-        static void Close()
+        public static void Close()
         {
             foreach (MyParticleEffect effect in m_libraryEffects.Values)
             {
@@ -235,6 +247,11 @@ namespace VRage.Game
 
         static public MyParticleEffect CreateParticleEffect(int id)
         {
+            /*if (LoadedFile == null)
+                InitDefault();
+
+            System.Diagnostics.Debug.Assert(LoadedFile != null, "Particle library load failed!");*/
+
             if (m_libraryEffects.ContainsKey(id))
             {
                 return m_libraryEffects[id].CreateInstance();

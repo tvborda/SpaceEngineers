@@ -11,9 +11,9 @@ namespace Sandbox.Game.Entities.Blocks
 {
     partial class MyPistonBase : Sandbox.ModAPI.IMyPistonBase
     {
-        IMyCubeGrid ModAPI.IMyPistonBase.TopGrid { get { return m_topGrid; } }
+        IMyCubeGrid ModAPI.IMyPistonBase.TopGrid { get { return TopGrid; } }
 
-        IMyCubeBlock ModAPI.IMyPistonBase.Top { get { return m_topBlock; } }
+        IMyCubeBlock ModAPI.IMyPistonBase.Top { get { return TopBlock; } }
 
         float IMyPistonBase.Velocity
         {
@@ -42,12 +42,12 @@ namespace Sandbox.Game.Entities.Blocks
 
         bool IMyPistonBase.PendingAttachment
         {
-            get { return m_topBlockId.Value == 0; }
+            get { return m_connectionState.Value.TopBlockId == 0; }
         }
 
-        Action<MyPistonBase> GetDelegate(Action<ModAPI.IMyPistonBase> value)
+        Action<MyMechanicalConnectionBlockBase> GetDelegate(Action<ModAPI.IMyPistonBase> value)
         {
-            return (Action<MyPistonBase>)Delegate.CreateDelegate(typeof(Action<MyPistonBase>), value.Target, value.Method);
+            return (Action<MyMechanicalConnectionBlockBase>)Delegate.CreateDelegate(typeof(Action<MyMechanicalConnectionBlockBase>), value.Target, value.Method);
         }
 
         event Action<bool> ModAPI.IMyPistonBase.LimitReached
@@ -65,17 +65,17 @@ namespace Sandbox.Game.Entities.Blocks
         void ModAPI.IMyPistonBase.Attach(ModAPI.IMyPistonTop top)
         {
             if (top != null)
-                m_topBlockId.Value = top.EntityId;
+                m_connectionState.Value = new State() { TopBlockId = top.EntityId };
         }
 
         void ModAPI.Ingame.IMyPistonBase.Attach()
         {
-            m_topBlockId.Value = 0;
+            m_connectionState.Value = new State() { TopBlockId = 0 };
         }
 
         void ModAPI.Ingame.IMyPistonBase.Detach()
         {
-            m_topBlockId.Value = null;
+            m_connectionState.Value = new State() { TopBlockId = null };
         }
     }
 }

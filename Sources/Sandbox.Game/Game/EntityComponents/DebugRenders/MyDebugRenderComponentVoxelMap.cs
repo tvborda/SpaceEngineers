@@ -18,8 +18,6 @@ using System.Threading;
 
 using Sandbox.Game.Entities;
 
-using VRage.Voxels;
-
 namespace Sandbox.Game.Components
 {
     class MyDebugRenderComponentVoxelMap : MyDebugRenderComponent
@@ -32,7 +30,7 @@ namespace Sandbox.Game.Components
             m_voxelMap = voxelMap;
         }
 
-        public override bool DebugDraw()
+        public override void DebugDraw()
         {
             var minCorner = m_voxelMap.PositionLeftBottomCorner;
             if (MyDebugDrawSettings.DEBUG_DRAW_VOXEL_MAP_AABB)
@@ -108,7 +106,6 @@ namespace Sandbox.Game.Components
             //        }
             //    }
             //}
-            return true;
         }
     }
 }

@@ -32,6 +32,7 @@ using Sandbox.Game.Replication;
 using VRage.Game.Entity;
 using VRage.Game;
 using VRage.Game.ModAPI;
+using VRage.Profiler;
 
 #endregion
 
@@ -73,12 +74,12 @@ namespace Sandbox.Game.Entities.Cube
 
         public static float LargeShipMaxLinearVelocity()
         {
-            return Math.Max(0, Math.Min(MAX_SHIP_SPEED, MyDefinitionManager.Static.EnvironmentDefinition.LargeShipMaxSpeed));
+            return Math.Max(0, Math.Min(MAX_SHIP_SPEED, MySector.EnvironmentDefinition.LargeShipMaxSpeed));
         }
 
         public static float SmallShipMaxLinearVelocity()
         {
-            return Math.Max(0, Math.Min(MAX_SHIP_SPEED, MyDefinitionManager.Static.EnvironmentDefinition.SmallShipMaxSpeed));
+            return Math.Max(0, Math.Min(MAX_SHIP_SPEED, MySector.EnvironmentDefinition.SmallShipMaxSpeed));
         }
 
         public static float GetShipMaxAngularVelocity(MyCubeSize size)
@@ -88,14 +89,14 @@ namespace Sandbox.Game.Entities.Cube
 
         public static float GetLargeShipMaxAngularVelocity()
         {
-            return Math.Max(0, Math.Min(LargeShipMaxAngularVelocityLimit, MyDefinitionManager.Static.EnvironmentDefinition.LargeShipMaxAngularSpeedInRadians));
+            return Math.Max(0, Math.Min(LargeShipMaxAngularVelocityLimit, MySector.EnvironmentDefinition.LargeShipMaxAngularSpeedInRadians));
         }
 
         public static float GetSmallShipMaxAngularVelocity()
         {
             if(MyFakes.TESTING_VEHICLES)
                 return float.MaxValue;
-            return Math.Max(0, Math.Min(SmallShipMaxAngularVelocityLimit, MyDefinitionManager.Static.EnvironmentDefinition.SmallShipMaxAngularSpeedInRadians));
+            return Math.Max(0, Math.Min(SmallShipMaxAngularVelocityLimit, MySector.EnvironmentDefinition.SmallShipMaxAngularSpeedInRadians));
         }
 
         public int DisableGravity = 0;
@@ -318,6 +319,7 @@ namespace Sandbox.Game.Entities.Cube
         {
             if(MyPerGameSettings.Destruction)
             {
+                if(IsStatic)
                 Shape.FindConnectionsToWorld();
             }
             base.Activate(world, clusterObjectID);
@@ -329,6 +331,7 @@ namespace Sandbox.Game.Entities.Cube
         {
             if (MyPerGameSettings.Destruction)
             {
+                if (IsStatic)
                 Shape.FindConnectionsToWorld();
             }
             base.ActivateBatch(world, clusterObjectID);
@@ -401,20 +404,15 @@ namespace Sandbox.Game.Entities.Cube
                 return;
             }
 
-
             MyGridContactInfo info = new MyGridContactInfo(ref value, m_grid);
 
             var myBody = RigidBody;// value.Base.BodyA.GetEntity() == m_grid.Components ? value.Base.BodyA : value.Base.BodyB;
-
-            // CH: DEBUG
-
 
             if (info.CollidingEntity is Sandbox.Game.Entities.Character.MyCharacter || info.CollidingEntity.MarkedForClose)
                 return;
 
             if (MyFakes.LANDING_GEAR_IGNORE_DAMAGE_CONTACTS && MyCubeGridGroups.Static.NoContactDamage.HasSameGroupAndIsGrid(otherEntity, thisEntity))
                 return;
-
 
             ProfilerShort.Begin("Grid contact point callback");
             bool hitVoxel = info.CollidingEntity is MyVoxelMap || info.CollidingEntity is MyVoxelPhysics;
@@ -474,10 +472,10 @@ namespace Sandbox.Game.Entities.Cube
             ProfilerShort.End();
         }
 
-        private static Vector3 GetGridPosition(HkContactPointEvent value, MyCubeGrid grid, int body)
+        private static Vector3 GetGridPosition(HkContactPoint contactPoint, HkRigidBody gridBody, MyCubeGrid grid, int body)
         {
-            var position = value.ContactPoint.Position + (body == 0 ? 0.1f : -0.1f) * value.ContactPoint.Normal;
-            var local = Vector3.Transform(position, Matrix.Invert(value.Base.GetRigidBody(body).GetRigidBodyMatrix()));
+            var position = contactPoint.Position + (body == 0 ? 0.1f : -0.1f) * contactPoint.Normal;
+            var local = Vector3.Transform(position, Matrix.Invert(gridBody.GetRigidBodyMatrix()));
             return local;
         }
 
@@ -521,7 +519,9 @@ namespace Sandbox.Game.Entities.Cube
             //if (separatingVelocity < 2)
             //    return false;
             var otherEntity = pt.CollidingBody.GetEntity(0);
-            if (otherEntity is MyEnvironmentItems) //jn:HACK
+            if (otherEntity is Sandbox.Game.WorldEnvironment.MyEnvironmentSector) //jn:HACK //ab:HACK
+                return false;
+            if (otherEntity.GetTopMostParent() == Entity)
                 return false;
             pt.ContactPosition = ClusterToWorld(pt.ContactPoint.Position);
 
@@ -673,6 +673,9 @@ namespace Sandbox.Game.Entities.Cube
 
         private bool PerformDeformation(ref HkBreakOffPointInfo pt, bool fromBreakParts, float separatingVelocity, MyEntity otherEntity)
         {
+            if (!m_grid.BlocksDestructionEnabled)
+                return false;
+            
             ProfilerShort.Begin("PerformDeformation");
 
             Debug.Assert(Sync.IsServer, "Function PerformDeformation should not be called from client");
@@ -761,12 +764,15 @@ namespace Sandbox.Game.Entities.Cube
         /// <param name="offsetThreshold">When deformation offset for bone is lower then threshold, it won't move the bone at all or do damage</param>
         public int ApplyDeformation(float deformationOffset, float softAreaPlanar, float softAreaVertical, Vector3 localPos, Vector3 localNormal, MyStringHash damageType, float offsetThreshold = 0, float lowerRatioLimit = 0, long attackerId = 0)
         {
+            if (!m_grid.BlocksDestructionEnabled)
+                return 0;
+
             int blocksDeformed = 0;
             offsetThreshold /= m_grid.GridSizeEnum == MyCubeSize.Large ? 1 : 5;
-            float roundSize = m_grid.GridSize / m_grid.Skeleton.BoneDensity;
+            float roundSize = m_grid.GridSize / MyGridSkeleton.BoneDensity;
             Vector3I roundedPos = Vector3I.Round((localPos + new Vector3(m_grid.GridSize / 2)) / roundSize);
             Vector3I gridPos = Vector3I.Round((localPos + new Vector3(m_grid.GridSize / 2)) / m_grid.GridSize);
-            Vector3I gridOffset = roundedPos - gridPos * m_grid.Skeleton.BoneDensity;
+            Vector3I gridOffset = roundedPos - gridPos * MyGridSkeleton.BoneDensity;
 
             float breakOffset = m_grid.GridSize * 0.7f;
             float breakOffsetDestruction = breakOffset;
@@ -871,7 +877,7 @@ namespace Sandbox.Game.Entities.Cube
             if (!destructionDone)
             {
                 //m_debugBones.Clear();
-                var boneDensity = m_grid.Skeleton.BoneDensity;
+                var boneDensity = MyGridSkeleton.BoneDensity;
                 ProfilerShort.Begin("Update deformation");
                 MyOrientedBoundingBox obb = new MyOrientedBoundingBox(
                     gridPos * boneDensity + gridOffset,
@@ -886,8 +892,8 @@ namespace Sandbox.Game.Entities.Cube
                 //Vector3I maxOffset = gridPos * m_grid.Skeleton.BoneDensity + gridOffset + distBones;
                 var minOffset = Vector3I.Floor(aabb.Min);
                 var maxOffset = Vector3I.Ceiling(aabb.Max);
-                minOffset = Vector3I.Max(minOffset, m_grid.Min * m_grid.Skeleton.BoneDensity);
-                maxOffset = Vector3I.Min(maxOffset, m_grid.Max * m_grid.Skeleton.BoneDensity);
+                minOffset = Vector3I.Max(minOffset, m_grid.Min * MyGridSkeleton.BoneDensity);
+                maxOffset = Vector3I.Min(maxOffset, m_grid.Max * MyGridSkeleton.BoneDensity);
 
                 Vector3I minDirtyBone = Vector3I.MaxValue;
                 Vector3I maxDirtyBone = Vector3I.MinValue;
@@ -899,8 +905,8 @@ namespace Sandbox.Game.Entities.Cube
 
                 ProfilerShort.Begin("Deform bones");
                 Vector3 bone;
-                Vector3I baseOffset = gridPos * m_grid.Skeleton.BoneDensity;
-                float boneDensityR = 1.0f / m_grid.Skeleton.BoneDensity;
+                Vector3I baseOffset = gridPos * MyGridSkeleton.BoneDensity;
+                float boneDensityR = 1.0f / MyGridSkeleton.BoneDensity;
                 var halfGridSize = new Vector3(m_grid.GridSize * 0.5f);
 
                 ProfilerShort.CustomValue("Bone Count", m_tmpBoneList.Count, 0);
@@ -1087,7 +1093,6 @@ namespace Sandbox.Game.Entities.Cube
                 case GridEffectType.Dust:
                     if (MyParticlesManager.TryCreateParticleEffect((int)MyParticleEffectsIDEnum.Collision_Meteor, out effect))
                     {
-                        effect.SetPreload(1f);
                         effect.UserScale = scale;
                         effect.WorldMatrix = MatrixD.CreateFromTransformScale(Quaternion.Identity, position, Vector3D.One);
                     }

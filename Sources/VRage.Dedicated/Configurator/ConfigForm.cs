@@ -8,17 +8,15 @@ using System.Reflection;
 using System.Diagnostics;
 using System.ServiceProcess;
 using System.Text;
-using VRage.Utils;
-using System.Collections.Generic;
-using VRage.Library.Utils;
 using VRage.FileSystem;
 using Sandbox.Engine.Utils;
-using VRage.Plugins;
 using Sandbox.Game;
 using System.ComponentModel.DataAnnotations;
 using Sandbox.Game.Screens.Helpers;
 using System.IO;
 using VRage.Game;
+using VRage.Voxels;
+using System.Collections.Generic;
 
 namespace VRage.Dedicated
 {
@@ -206,7 +204,7 @@ namespace VRage.Dedicated
 
             foreach (var scenario in MyDefinitionManager.Static.GetScenarioDefinitions())
             {
-                if (scenario.Public)
+                if (scenario.Public || !MyFinalBuildConstants.IS_OFFICIAL)
                 {
                     ScenarioItem item = new ScenarioItem() { Definition = scenario };
                     scenarioCB.Items.Add(item);
@@ -238,7 +236,11 @@ namespace VRage.Dedicated
 
             availableSaves.Sort((x, y) =>
             {
-                return x.Item1.CompareTo(y.Item1);
+                int result = y.Item2.LastSaveTime.CompareTo(x.Item2.LastSaveTime);
+                if (result != 0) return result;
+
+                result = x.Item1.CompareTo(y.Item1);
+                return result;
             });
 
             gamesListBox.Items.Clear();
@@ -259,7 +261,7 @@ namespace VRage.Dedicated
                 }
             }
 
-            gamesListBox.Sorted = true;
+            gamesListBox.Sorted = false;
         }
 
         void FillBattlesList()
@@ -449,7 +451,7 @@ namespace VRage.Dedicated
                     m_selectedSessionSettings.EnableFlora = (MyPerGameSettings.Game == GameEnum.SE_GAME) && MyFakes.ENABLE_PLANETS;
                     m_selectedSessionSettings.EnableSunRotation = MyPerGameSettings.Game == GameEnum.SE_GAME;
                     m_selectedSessionSettings.CargoShipsEnabled = true;
-                    m_selectedSessionSettings.EnableCyberhounds = false;
+                    m_selectedSessionSettings.EnableWolfs = false;
                     m_selectedSessionSettings.EnableSpiders = true;
 
                     m_selectedSessionSettings.Battle = false;                    
@@ -702,7 +704,7 @@ namespace VRage.Dedicated
             {
                 var voxelGeneratorControl = foundControls[0] as NumericUpDown;
                 voxelGeneratorControl.Minimum = 0;
-                voxelGeneratorControl.Maximum = VRage.Voxels.MyVoxelConstants.VOXEL_GENERATOR_VERSION;
+                voxelGeneratorControl.Maximum = MyVoxelConstants.VOXEL_GENERATOR_VERSION;
 
                 var oxygenControl = tableLayoutPanel1.Controls.Find("EnableOxygen", true)[0] as CheckBox;
                 oxygenControl.CheckedChanged += oxygenCheckBox_CheckedChanged;
@@ -710,7 +712,7 @@ namespace VRage.Dedicated
                 if (newGameSettingsPanel.Enabled && !loadFromConfig)
                 {
                     oxygenControl.Checked = true;
-                    voxelGeneratorControl.Value = VRage.Voxels.MyVoxelConstants.VOXEL_GENERATOR_VERSION;
+                    voxelGeneratorControl.Value = MyVoxelConstants.VOXEL_GENERATOR_VERSION;
                 }
             }
         }
@@ -721,9 +723,9 @@ namespace VRage.Dedicated
             var oxygenControl = (CheckBox)sender;
             if (oxygenControl.Checked)
             {
-                if (voxelGeneratorControl.Value < VRage.Voxels.MyVoxelConstants.VOXEL_GENERATOR_MIN_ICE_VERSION)
+                if (voxelGeneratorControl.Value < MyVoxelConstants.VOXEL_GENERATOR_MIN_ICE_VERSION)
                 {
-                    voxelGeneratorControl.Value = VRage.Voxels.MyVoxelConstants.VOXEL_GENERATOR_MIN_ICE_VERSION;
+                    voxelGeneratorControl.Value = MyVoxelConstants.VOXEL_GENERATOR_MIN_ICE_VERSION;
                 }
             }
         }

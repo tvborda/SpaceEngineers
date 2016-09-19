@@ -16,7 +16,6 @@ using System.Xml.Serialization;
 using VRage;
 
 using VRage.Serialization;
-using Sandbox.Graphics.Render;
 using Sandbox.Graphics;
 
 //  This class encapsulated read/write access to our config file - xxx.cfg - stored in user's local files
@@ -58,8 +57,11 @@ namespace Sandbox.Engine.Utils
         readonly string MUSIC_VOLUME = "MusicVolume";
         readonly string VOICE_CHAT_VOLUME = "VoiceChatVolume";
         readonly string LANGUAGE = "Language";
+        readonly string SKIN = "Skin";
         readonly string CONTROLS_HINTS = "ControlsHints";
         readonly string ROTATION_HINTS = "RotationHints";
+        readonly string ANIMATED_ROTATION = "AnimatedRotation";
+        readonly string BUILDING_SIZE_HINT = "BuildingSizeHint";
         readonly string SHOW_CROSSHAIR = "ShowCrosshair";
         readonly string DISABLE_HEADBOB = "DisableHeadbob";
         readonly string CONTROLS_GENERAL = "ControlsGeneral";
@@ -82,6 +84,8 @@ namespace Sandbox.Engine.Utils
         readonly string WINDOW_MODE = "WindowMode";
         readonly string MOUSE_CAPTURE = "CaptureMouse";
         readonly string HUD_WARNINGS = "HudWarnings";
+        readonly string DYNAMIC_MUSIC = "EnableDynamicMusic";
+        readonly string SHIP_SOUNDS_SPEED = "ShipSoundsAreBasedOnSpeed";
         readonly string ANTIALIASING_MODE = "AntialiasingMode";
         readonly string SHADOW_MAP_RESOLUTION = "ShadowMapResolution";
         readonly string MULTITHREADED_RENDERING = "MultithreadedRendering";
@@ -90,6 +94,7 @@ namespace Sandbox.Engine.Utils
         readonly string ANISOTROPIC_FILTERING = "AnisotropicFiltering";
         readonly string FOLIAGE_DETAILS = "FoliageDetails";
         readonly string GRASS_DENSITY = "GrassDensity";
+        readonly string VEGETATION_DISTANCE = "VegetationViewDistance";
         readonly string GRAPHICS_RENDERER = "GraphicsRenderer";
         readonly string ENABLE_VOICE_CHAT = "VoiceChat";
         readonly string ENABLE_MUTE_WHEN_NOT_IN_FOCUS = "EnableMuteWhenNotInFocus";
@@ -196,6 +201,20 @@ namespace Sandbox.Engine.Utils
             set
             {
                 SetParameterValue(GRASS_DENSITY, value);
+            }
+        }
+
+
+        public float VegetationDrawDistance
+        {
+            get
+            {
+                return MyUtils.GetFloatFromString(GetParameterValue(VEGETATION_DISTANCE), 100);
+            }
+
+            set
+            {
+                SetParameterValue(VEGETATION_DISTANCE, value);
             }
         }
 
@@ -436,6 +455,30 @@ namespace Sandbox.Engine.Utils
             }
         }
 
+        public bool AnimatedRotation
+        {
+            get
+            {
+                return MyUtils.GetBoolFromString(GetParameterValue(ANIMATED_ROTATION), true);
+            }
+            set
+            {
+                SetParameterValue(ANIMATED_ROTATION, value);
+            }
+        }
+
+        public bool ShowBuildingSizeHint
+        {
+            get
+            {
+                return MyUtils.GetBoolFromString(GetParameterValue(BUILDING_SIZE_HINT), true);
+            }
+            set
+            {
+                SetParameterValue(BUILDING_SIZE_HINT, value);
+            }
+        }
+
         public bool ShowCrosshair
         {
             get
@@ -498,6 +541,25 @@ namespace Sandbox.Engine.Utils
             set
             {
                 SetParameterValue(LANGUAGE, (byte)value);
+            }
+        }
+
+        public string Skin
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(GetParameterValue(SKIN)))
+                {
+                    SetParameterValue(SKIN, "Default");
+                    Save();
+                }
+
+                return GetParameterValue(SKIN);
+            }
+
+            set
+            {
+                SetParameterValue(SKIN, value);
             }
         }
 
@@ -766,6 +828,18 @@ namespace Sandbox.Engine.Utils
         {
             get { return MyUtils.GetBoolFromString(GetParameterValue(ENABLE_MUTE_WHEN_NOT_IN_FOCUS), true); }
             set { SetParameterValue(ENABLE_MUTE_WHEN_NOT_IN_FOCUS, value); }
+        }
+
+        public bool EnableDynamicMusic
+        {
+            get { return MyUtils.GetBoolFromString(GetParameterValue(DYNAMIC_MUSIC), true); }
+            set { SetParameterValue(DYNAMIC_MUSIC, value); }
+        }
+
+        public bool ShipSoundsAreBasedOnSpeed
+        {
+            get { return MyUtils.GetBoolFromString(GetParameterValue(SHIP_SOUNDS_SPEED), true); }
+            set { SetParameterValue(SHIP_SOUNDS_SPEED, value); }
         }
 
         public MyStringId GraphicsRenderer
@@ -1056,9 +1130,6 @@ namespace Sandbox.Engine.Utils
                 var id = MyStringId.TryGet(GetParameterValue(GRAPHICS_RENDERER));
 
                 if (id == MySandboxGame.DirectX11RendererKey)
-                    return MyGraphicsRenderer.DX11;
-
-                if (id == MySandboxGame.DirectX9RendererKey)
                     return MyGraphicsRenderer.DX11;
 
                 return MyGraphicsRenderer.NONE;

@@ -1,4 +1,6 @@
-﻿using Sandbox.Engine.Platform;
+﻿#if !XB1
+
+using Sandbox.Engine.Platform;
 using Sandbox.Engine.Utils;
 using System;
 using System.Collections.Generic;
@@ -9,6 +11,7 @@ using VRage;
 using VRage.Utils;
 using VRage.Win32;
 using VRageMath;
+using VRageRender.ExternalApp;
 
 namespace Sandbox
 {
@@ -86,7 +89,7 @@ namespace Sandbox
 
         private void SetClip()
         {
-            Cursor.Clip = this.RectangleToScreen(this.ClientRectangle);
+            Cursor.Clip = this.RectangleToScreen(ClientRectangle);
         }
 
         private static void ClearClip()
@@ -191,3 +194,5 @@ namespace Sandbox
         }
     }
 }
+
+#endif

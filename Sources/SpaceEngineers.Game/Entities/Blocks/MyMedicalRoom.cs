@@ -21,7 +21,7 @@ using Sandbox.Game.Multiplayer;
 using Sandbox.Game.Screens.Terminal.Controls;
 using Sandbox.Game.World;
 using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity.UseObject;
@@ -31,6 +31,7 @@ using VRage.ModAPI;
 using VRage.Network;
 using VRage.Utils;
 using VRageMath;
+using VRageRender.Import;
 
 namespace SpaceEngineers.Game.Entities.Blocks
 {
@@ -152,8 +153,25 @@ namespace SpaceEngineers.Game.Entities.Blocks
         /// </summary>
         public bool SpawnWithoutOxygenEnabled { set { m_spawnWithoutOxygenEnabled = value; } get { return m_spawnWithoutOxygenEnabled; } }
 
-        static MyMedicalRoom()
+        public MyMedicalRoom()
         {
+            CreateTerminalControls();
+
+            m_idleSoundEmitter = new MyEntity3DSoundEmitter(this, true);
+            m_progressSoundEmitter = new MyEntity3DSoundEmitter(this, true);
+
+            m_progressSoundEmitter.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.ShouldPlay2D].Add((Func<bool>)(() => MySession.Static.ControlledEntity != null && m_user == MySession.Static.ControlledEntity.Entity));
+            if (MySession.Static != null && MyFakes.ENABLE_NEW_SOUNDS && MySession.Static.Settings.RealisticSound)
+            {
+                m_progressSoundEmitter.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.CanHear].Add((Func<bool>)(() => MySession.Static.ControlledEntity != null && m_user == MySession.Static.ControlledEntity.Entity));
+            }
+        }
+
+        static void CreateTerminalControls()
+        {
+            if (MyTerminalControlFactory.AreControlsCreated<MyMedicalRoom>())
+                return;
+
             //terminal:
             var label = new MyTerminalControlLabel<MyMedicalRoom>(MySpaceTexts.TerminalScenarioSettingsLabel);
             var ownershipCheckbox = new MyTerminalControlCheckbox<MyMedicalRoom>("TakeOwnership", MySpaceTexts.MedicalRoom_ownershipAssignmentLabel, MySpaceTexts.MedicalRoom_ownershipAssignmentTooltip);
@@ -174,18 +192,6 @@ namespace SpaceEngineers.Game.Entities.Blocks
             };
             factionCheckbox.Enabled = (x) => MySession.Static.Settings.ScenarioEditMode;
             MyTerminalControlFactory.AddControl(factionCheckbox);
-        }
-
-        public MyMedicalRoom()
-        {
-            m_idleSoundEmitter = new MyEntity3DSoundEmitter(this, true);
-            m_progressSoundEmitter = new MyEntity3DSoundEmitter(this, true);
-
-            m_progressSoundEmitter.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.ShouldPlay2D].Add((Func<bool>) (() => MySession.Static.ControlledEntity != null && m_user == MySession.Static.ControlledEntity.Entity));
-            if (MySession.Static != null && MyFakes.ENABLE_NEW_SOUNDS && MySession.Static.Settings.RealisticSound)
-            {
-                m_progressSoundEmitter.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.CanHear].Add((Func<bool>) (() => MySession.Static.ControlledEntity != null && m_user == MySession.Static.ControlledEntity.Entity));
-            }
         }
 
         public override void Init(MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
@@ -216,7 +222,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
 	         
             m_rechargeSocket = new MyRechargeSocket();
 
-            NeedsUpdate |= MyEntityUpdateEnum.EACH_10TH_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.EACH_10TH_FRAME;
 
             SteamUserId = (objectBuilder as MyObjectBuilder_MedicalRoom).SteamUserId;
 
@@ -287,11 +293,13 @@ namespace SpaceEngineers.Game.Entities.Blocks
             return builder;
         }
 
-        public override void UpdateBeforeSimulation100()
+        public override void UpdateSoundEmitters()
         {
-            base.UpdateBeforeSimulation100();
-            m_idleSoundEmitter.Update();
-            m_progressSoundEmitter.Update();
+            base.UpdateSoundEmitters();
+            if(m_idleSoundEmitter != null)
+                m_idleSoundEmitter.Update();
+            if(m_progressSoundEmitter != null)
+                m_progressSoundEmitter.Update();
         }
 
         public override void UpdateBeforeSimulation10()
@@ -429,8 +437,8 @@ namespace SpaceEngineers.Game.Entities.Blocks
 
         public bool HasSpawnPosition()
         {
-             MyModelDummy dummy;
-             return Model.Dummies.TryGetValue("dummy detector_respawn", out dummy);
+            MyModelDummy dummy;
+            return Model.Dummies.TryGetValue("dummy detector_respawn", out dummy);
         }
 
         public MatrixD GetSpawnPosition()
@@ -443,10 +451,10 @@ namespace SpaceEngineers.Game.Entities.Blocks
                 dummyLocal = dummy.Matrix;
             }
 
-            MatrixD worldMatrix = MatrixD.Multiply(dummyLocal, WorldMatrix);
+            MatrixD worldMatrix = MatrixD.Multiply(MatrixD.CreateTranslation(dummyLocal.Translation), WorldMatrix);
             return worldMatrix;
         }
-         
+
         public float GetOxygenLevel()
         {
             if (!MySession.Static.Settings.EnableOxygen)

@@ -59,6 +59,12 @@ namespace VRage.Game
         public short MaxFloatingObjects = 56;
 
         [ProtoMember]
+        [Display(Name = "Max Backup Saves")]
+        [GameRelation(Game.SpaceEngineers)]
+        [Range(0, 1000)]
+        public short MaxBackupSaves = 5;
+
+        [ProtoMember]
         [Display(Name = "Environment hostility")]
         [GameRelation(Game.SpaceEngineers)]
         // Only used in quickstart - Scenarios have there own Settings
@@ -225,6 +231,11 @@ namespace VRage.Game
         public bool EnableOxygen = false;
 
         [ProtoMember]
+        [Display(Name = "Enable airtightness")]
+        [GameRelation(Game.SpaceEngineers)]
+        public bool EnableOxygenPressurization = false;
+
+        [ProtoMember]
         [Display(Name = "Enable 3rd person view")]
         [GameRelation(Game.SpaceEngineers)]
         public bool Enable3rdPersonView = true;
@@ -240,9 +251,9 @@ namespace VRage.Game
         public bool EnableFlora = true;
 
         [ProtoMember]
-        [Display(Name = "Enable Station Voxel Support")]
+        [Display(Name = "Enable convert to station")]
         [GameRelation(Game.SpaceEngineers)]
-        public bool EnableStationVoxelSupport = true;
+        public bool EnableConvertToStation = true;
 
         [ProtoMember]
         [Display(Name = "Enable Sun Rotation")]
@@ -315,9 +326,9 @@ namespace VRage.Game
         public bool EnableDrones = true;
 
         [ProtoMember]
-        [Display(Name = "Enable cyberhounds")]
+        [Display(Name = "Enable wolfs")]
         [GameRelation(Game.SpaceEngineers)]
-        public bool? EnableCyberhounds = true;
+        public bool? EnableWolfs = true;
 
         [ProtoMember]
         [Display(Name = "Enable spiders")]

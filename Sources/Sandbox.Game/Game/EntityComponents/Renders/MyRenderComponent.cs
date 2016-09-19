@@ -24,6 +24,8 @@ using VRage.Game.Components;
 using VRage.ModAPI;
 using VRage.Game.Models;
 using VRage.Game;
+using VRage.Profiler;
+using VRageRender.Import;
 
 namespace Sandbox.Game.Components
 {
@@ -49,7 +51,8 @@ namespace Sandbox.Game.Components
                  m_colorMaskHsv,
                  Transparency,
                  maxViewDistance: float.MaxValue,
-                 depthBias: DepthBias
+                 depthBias: DepthBias,
+                 rescale: m_model.ScaleFactor
                 ));
         }
 

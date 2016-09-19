@@ -18,6 +18,7 @@ using VRage.Game.ObjectBuilders.Definitions;
 using VRageMath;
 using VRage.Game.Components;
 using VRage.Game.Entity;
+using Sandbox.Engine.Multiplayer;
 
 namespace Sandbox.Game.Entities.Character.Components
 {
@@ -458,6 +459,11 @@ namespace Sandbox.Game.Entities.Character.Components
                         && gasInfo.FillLevel <= 0 
                         && (Character.ControllerInfo.Controller != null && MySession.Static.IsAdminModeEnabled(Character.ControllerInfo.Controller.Player.Id.SteamId) == false || (MySession.Static.LocalCharacter != Character && Sync.IsServer == false)))
                     {
+                        if (Sync.IsServer && MySession.Static.LocalCharacter != Character)
+                        {
+                            MyMultiplayer.RaiseEvent(Character, x => x.SwitchJetpack, new VRage.Network.EndpointId(Character.ControllerInfo.Controller.Player.Id.SteamId));
+                        }
+
                         jetpack.SwitchThrusts();
                     }
                 }
@@ -498,12 +504,12 @@ namespace Sandbox.Game.Entities.Character.Components
                 else if (lowOxygenDamage)
                 {
                     Character.DoDamage(1f, MyDamageType.Asphyxia, true);
-                } 
+                }
             }
 
             Character.UpdateOxygen(SuitOxygenAmount);
 
-            foreach(var gasInfo in m_storedGases)
+            foreach (var gasInfo in m_storedGases)
             {
                 Character.UpdateStoredGas(gasInfo.Id, gasInfo.FillLevel);
             }
@@ -551,7 +557,10 @@ namespace Sandbox.Game.Entities.Character.Components
                 //Character.ChangeModelAndColor(Definition.HelmetVariation, Character.ColorMask);
                 NeedsOxygenFromSuit = !NeedsOxygenFromSuit;
                 AnimateHelmet();
-                m_helmetToggleNotification.Text = (!NeedsOxygenFromSuit ? MySpaceTexts.NotificationHelmetOn : MySpaceTexts.NotificationHelmetOff);
+                if (MySession.Static.LocalCharacter == Character)
+                {
+                    m_helmetToggleNotification.Text = (!NeedsOxygenFromSuit ? MySpaceTexts.NotificationHelmetOn : MySpaceTexts.NotificationHelmetOff);
+                }
             }
             else
             {

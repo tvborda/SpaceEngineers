@@ -36,6 +36,8 @@ using ParallelTasks;
 using Sandbox.Definitions;
 using VRage.Game.Entity;
 using VRage.Game;
+using VRage.Library;
+using VRage.Profiler;
 
 #endregion
 
@@ -91,10 +93,14 @@ namespace Sandbox.Game.Entities
 
         static MyEntities()
         {
+#if XB1 // XB1_ALLINONEASSEMBLY
+            MyEntityFactory.RegisterDescriptorsFromAssembly(MyAssembly.AllInOneAssembly);
+#else // !XB1
             MyEntityFactory.RegisterDescriptorsFromAssembly(Assembly.GetCallingAssembly());
             MyEntityFactory.RegisterDescriptorsFromAssembly(MyPlugins.GameAssembly);
             MyEntityFactory.RegisterDescriptorsFromAssembly(MyPlugins.SandboxAssembly);
             MyEntityFactory.RegisterDescriptorsFromAssembly(MyPlugins.UserAssembly);
+#endif // !XB1
 
             // ------------------ PLEASE READ -------------------------
             // VRAGE TODO: Delegates in MyEntity help us to get rid of sandbox. There are too many dependencies and this was the easy way to cut MyEntity out of sandbox.
@@ -1947,8 +1953,15 @@ namespace Sandbox.Game.Entities
         {
             get
             {
-                if (!Environment.Is64BitProcess && MySandboxGame.Config.MemoryLimits)
+                if (!MyEnvironment.Is64BitProcess && MySandboxGame.Config.MemoryLimits)
+#if !XB1
                     return GC.GetTotalMemory(false) > EntityManagedMemoryLimit || WinApi.WorkingSet > EntityNativeMemoryLimit;
+#else // XB1
+                {
+                    System.Diagnostics.Debug.Assert(false, "XB1 TODO?");
+                    return false;
+                }
+#endif // XB1
                 else
                     return false;
             }
@@ -2255,6 +2268,34 @@ namespace Sandbox.Game.Entities
                     }
 
                     var entity = MyEntities.CreateFromObjectBuilderAndAdd(ob);
+                    Debug.Assert(entity != null, "Entity wasn't created!");
+                    return entity;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.Fail("Entity Creation Error: Couldn't create an object builder and cast is as MyObjectBuilder_EntityBase");
+                }
+
+                return null;
+            }
+            return null;
+        }
+
+        public static MyEntity CreateEntity(MyDefinitionId entityContainerId, bool setPosAndRot = false, Vector3? position = null, Vector3? up = null, Vector3? forward = null)
+        {
+            MyContainerDefinition definition;
+            if (MyDefinitionManager.Static.TryGetContainerDefinition(entityContainerId, out definition))
+            {
+                var ob = MyObjectBuilderSerializer.CreateNewObject(entityContainerId) as MyObjectBuilder_EntityBase;
+
+                if (ob != null)
+                {
+                    if (setPosAndRot)
+                    {
+                        ob.PositionAndOrientation = new VRage.MyPositionAndOrientation(position.HasValue ? position.Value : Vector3.Zero, forward.HasValue ? forward.Value : Vector3.Forward, up.HasValue ? up.Value : Vector3.Up);
+                    }
+
+                    var entity = MyEntities.CreateFromObjectBuilder(ob);
                     Debug.Assert(entity != null, "Entity wasn't created!");
                     return entity;
                 }

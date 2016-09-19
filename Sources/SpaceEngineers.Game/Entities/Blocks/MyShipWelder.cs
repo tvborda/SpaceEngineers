@@ -23,6 +23,7 @@ using System.Linq;
 using System.Text;
 using VRage;
 using VRage.Game;
+using VRage.Sync;
 using VRage.Utils;
 using VRageMath;
 using VRageRender;
@@ -30,7 +31,7 @@ using VRageRender;
 namespace SpaceEngineers.Game.Entities.Blocks
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_ShipWelder))]
-    class MyShipWelder : MyShipToolBase, IMyShipWelder
+    public class MyShipWelder : MyShipToolBase, IMyShipWelder
     {
         private static MySoundPair METAL_SOUND = new MySoundPair("ToolLrgWeldMetal");
         private static MySoundPair IDLE_SOUND = new MySoundPair("ToolLrgWeldIdle");
@@ -49,18 +50,6 @@ namespace SpaceEngineers.Game.Entities.Blocks
         MyParticleEffect m_particleEffect;
         MyLight m_effectLight;
 
-        static MyShipWelder()
-        {
-            if (MyFakes.ENABLE_WELDER_HELP_OTHERS)
-            {
-                var helpOthersCheck = new MyTerminalControlCheckbox<MyShipWelder>("helpOthers", MyCommonTexts.ShipWelder_HelpOthers, MyCommonTexts.ShipWelder_HelpOthers);
-                helpOthersCheck.Getter = (x) => x.HelpOthers;
-                helpOthersCheck.Setter = (x, v) => x.m_helpOthers.Value = v;
-                helpOthersCheck.EnableAction();
-                MyTerminalControlFactory.AddControl(helpOthersCheck);
-            }
-        }
-
         public bool HelpOthers
         {
             get { return m_helpOthers; }
@@ -73,7 +62,30 @@ namespace SpaceEngineers.Game.Entities.Blocks
                 return true;
             }
         }
-        
+
+        public MyShipWelder()
+        {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_helpOthers = SyncType.CreateAndAddProp<bool>();
+#endif // XB1
+            CreateTerminalControls();
+        }
+
+        static void CreateTerminalControls()
+        {
+            if (MyTerminalControlFactory.AreControlsCreated<MyShipWelder>())
+                return;
+
+            if (MyFakes.ENABLE_WELDER_HELP_OTHERS)
+            {
+                var helpOthersCheck = new MyTerminalControlCheckbox<MyShipWelder>("helpOthers", MyCommonTexts.ShipWelder_HelpOthers, MyCommonTexts.ShipWelder_HelpOthers);
+                helpOthersCheck.Getter = (x) => x.HelpOthers;
+                helpOthersCheck.Setter = (x, v) => x.m_helpOthers.Value = v;
+                helpOthersCheck.EnableAction();
+                MyTerminalControlFactory.AddControl(helpOthersCheck);
+            }
+        }
+
         public override void Init(MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
         {
             SyncFlag = true;
@@ -133,7 +145,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
             
             foreach (var block in targets)
             {
-                if (block.BuildLevelRatio == 1.0f)
+                if (block.BuildLevelRatio == 1.0f || block == SlimBlock)
                 {
                     targetCount--;
                     continue;
@@ -180,6 +192,10 @@ namespace SpaceEngineers.Game.Entities.Blocks
                 float coefficient = (MyShipGrinderConstants.GRINDER_COOLDOWN_IN_MILISECONDS * 0.001f) / (targetCount>0?targetCount:1);
                 foreach (var block in targets)
                 {
+                    // Don't weld yourself
+                    if (block == SlimBlock) 
+                        continue;
+
                     if (!block.IsFullIntegrity)
                         unweldedBlocksDetected = true;
                     
@@ -200,6 +216,10 @@ namespace SpaceEngineers.Game.Entities.Blocks
             {
                 foreach (var block in targets)
                 {
+                    // Don't weld yourself
+                    if (block == SlimBlock)
+                        continue;
+
                     if (block.CanContinueBuild(this.GetInventory()))
                         welding = true;
                 }
@@ -261,12 +281,12 @@ namespace SpaceEngineers.Game.Entities.Blocks
                         foreach (var block in m_projectedBlock)
                         {
                             var canBuild = grid.Projector.CanBuild(block, true);
-                            if (canBuild == MyProjectorBase.BuildCheckResult.OK)
+                            if (canBuild == BuildCheckResult.OK)
                             {
                                 var cubeBlock = grid.GetCubeBlock(block.Position);
                                 if (cubeBlock != null)
                                 {
-                                    m_raycastData.Add(new MyWelder.ProjectionRaycastData(MyProjectorBase.BuildCheckResult.OK, cubeBlock, grid.Projector));
+                                    m_raycastData.Add(new MyWelder.ProjectionRaycastData(BuildCheckResult.OK, cubeBlock, grid.Projector));
                                 }
                             }
                         }

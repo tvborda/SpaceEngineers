@@ -29,7 +29,9 @@ using VRage.Import;
 using VRage.Network;
 using Sandbox.Engine.Multiplayer;
 using VRage.Game.ModAPI.Interfaces;
+using VRage.Profiler;
 using VRage.Serialization;
+using VRageRender.Import;
 
 namespace Sandbox.Game.Entities
 {
@@ -253,7 +255,7 @@ namespace Sandbox.Game.Entities
                 }
             }
 
-            public override void OnMotion(HkRigidBody rbo, float step)
+            public override void OnMotion(HkRigidBody rbo, float step, bool fromParent)
             {
                 // Do nothing
             }
@@ -1521,6 +1523,19 @@ namespace Sandbox.Game.Entities
             get { return Render.RenderObjectIDs != null ? (int)Render.RenderObjectIDs[0] : 0; }
         }
 
+        void IMyUseObject.SetRenderID(uint id)
+        {
+        }
+
+        int IMyUseObject.InstanceID
+        {
+            get { return -1; }
+        }
+
+        void IMyUseObject.SetInstanceID(int id)
+        {
+        }
+
         bool IMyUseObject.ShowOverlay
         {
             get { return false; }
@@ -1742,5 +1757,7 @@ namespace Sandbox.Game.Entities
                 manipulationTool.RotateManipulatedEntity(ref rotation);
             }
         }
+
+        public void UpdateSoundEmitter(){ }
     }
 }

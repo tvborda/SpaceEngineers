@@ -15,11 +15,12 @@ using VRage.ModAPI;
 using SpaceEngineers.ObjectBuilders.Definitions;
 using Sandbox.Game.Entities;
 using SpaceEngineers.Definitions;
+using VRageRender.Import;
 
 namespace SpaceEngineers.Game.Entities.Blocks
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_UpgradeModule))]
-    class MyUpgradeModule : MyFunctionalBlock, ModAPI.IMyUpgradeModule
+    public class MyUpgradeModule : MyFunctionalBlock, ModAPI.IMyUpgradeModule
     {
         private ConveyorLinePosition[] m_connectionPositions;
         private Dictionary<ConveyorLinePosition, MyCubeBlock> m_connectedBlocks;
@@ -43,7 +44,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
         {
             base.Init(builder, cubeGrid);
 
-            NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.EACH_10TH_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.EACH_10TH_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME;
 
             m_connectedBlocks = new Dictionary<ConveyorLinePosition, MyCubeBlock>();
             m_dummies = new SortedDictionary<string,MyModelDummy>(VRage.Game.Models.MyModels.GetModelOnlyDummies(BlockDefinition.Model).Dummies);
@@ -125,9 +126,18 @@ namespace SpaceEngineers.Game.Entities.Blocks
             base.UpdateBeforeSimulation100();
             if (m_soundEmitter == null)
                 return;
-            if (IsWorking && m_connectedBlockCount > 0 && (m_soundEmitter.IsPlaying == false || m_soundEmitter.SoundPair != m_baseIdleSound))
+            bool powered = false;
+            foreach(var block in m_connectedBlocks.Values)
+            {
+                powered |= block != null && block.ResourceSink != null && block.ResourceSink.IsPowered && block.IsWorking;
+                if (powered)
+                    break;
+            }
+            powered &= IsWorking;
+
+            if (powered && m_connectedBlockCount > 0 && (m_soundEmitter.IsPlaying == false || m_soundEmitter.SoundPair != m_baseIdleSound))
                 m_soundEmitter.PlaySound(m_baseIdleSound, true);
-            else if ((!IsWorking || m_connectedBlockCount == 0) && m_soundEmitter.IsPlaying && m_soundEmitter.SoundPair == m_baseIdleSound)
+            else if ((!powered || m_connectedBlockCount == 0) && m_soundEmitter.IsPlaying && m_soundEmitter.SoundPair == m_baseIdleSound)
                 m_soundEmitter.StopSound(false);
         }
 
@@ -245,9 +255,11 @@ namespace SpaceEngineers.Game.Entities.Blocks
         {
             foreach (var upgrade in m_upgrades)
             {
-                float val;
-                if (block.UpgradeValues.TryGetValue(upgrade.UpgradeType, out val))
+                float valFloat;
+                double val;
+                if (block.UpgradeValues.TryGetValue(upgrade.UpgradeType, out valFloat))
                 {
+                    val = valFloat;
                     if (upgrade.ModifierType == MyUpgradeModifierType.Additive)
                     {
                         val -= upgrade.Modifier;
@@ -263,11 +275,15 @@ namespace SpaceEngineers.Game.Entities.Blocks
                         val /= upgrade.Modifier;
                         if (val < 1f)
                         {
+                            //GR: this is caused due to numerical overflow of floats (max 7 digits for float)
+                            //Did the multiplications of val with double and then save to float
+                            //Still there are numerical incosistencies because of storing to float so compare within very small threshold
+                            if( (val + 1e-7) < 1f)
+                                Debug.Fail("Multiplicative modifier cannot be < 1.0f!");
                             val = 1f;
-                            Debug.Fail("Multiplicative modifier cannot be < 1.0f!");
                         }
                     }
-                    block.UpgradeValues[upgrade.UpgradeType] = val;
+                    block.UpgradeValues[upgrade.UpgradeType] = (float)val;
                 }
             }
 
@@ -278,9 +294,11 @@ namespace SpaceEngineers.Game.Entities.Blocks
         {
             foreach (var upgrade in m_upgrades)
             {
-                float val;
-                if (block.UpgradeValues.TryGetValue(upgrade.UpgradeType, out val))
+                float valFloat;
+                double val;
+                if (block.UpgradeValues.TryGetValue(upgrade.UpgradeType, out valFloat))
                 {
+                    val = valFloat;
                     if (upgrade.ModifierType == MyUpgradeModifierType.Additive)
                     {
                         val += upgrade.Modifier;
@@ -289,7 +307,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
                     {
                         val *= upgrade.Modifier;
                     }
-                    block.UpgradeValues[upgrade.UpgradeType] = val;
+                    block.UpgradeValues[upgrade.UpgradeType] = (float)val;
                 }
             }
 

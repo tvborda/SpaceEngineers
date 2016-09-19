@@ -25,6 +25,8 @@ using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
 using VRageRender;
+using VRageRender.Import;
+using VRageRender.Messages;
 
 namespace Sandbox.Game.Entities
 {
@@ -179,6 +181,19 @@ namespace Sandbox.Game.Entities
         public int RenderObjectID
         {
             get { return (int)Render.RenderObjectIDs[0]; }
+        }
+
+        public void SetRenderID(uint id)
+        {
+        }
+
+        public int InstanceID
+        {
+            get { return -1; }
+        }
+
+        public void SetInstanceID(int id)
+        {
         }
 
         public bool ShowOverlay

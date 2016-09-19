@@ -22,7 +22,6 @@ using System.Linq;
 using System.Text;
 using Sandbox.Engine.Networking;
 using VRage;
-using VRage;
 using VRage.Collections;
 using VRage.FileSystem;
 using VRage.Game;
@@ -34,6 +33,7 @@ using VRage.ObjectBuilders;
 using VRage.Utils;
 using VRageMath;
 using VRage.Game.Entity;
+using VRage.Profiler;
 
 #endregion
 
@@ -110,7 +110,7 @@ namespace Sandbox.Game.Gui
                     return true;
                 }
             }
-            return false;     
+            return false;
         }
 
         MyGuiBlockCategoryDefinition m_lastCategory = null;
@@ -139,7 +139,9 @@ namespace Sandbox.Game.Gui
         }
         public bool MatchesCondition(MyDefinitionBase itemId)
         {
-            return MatchesCondition(itemId.DisplayNameText.ToString());
+            if (itemId != null)
+                return MatchesCondition(itemId.DisplayNameText.ToString());
+            return false;
         }
         public void AddDefinitionGroup(MyCubeBlockDefinitionGroup definitionGruop)
         {
@@ -167,7 +169,7 @@ namespace Sandbox.Game.Gui
         protected MyGuiControlTextbox m_searchItemTextBox;
         protected MyGuiControlListbox m_categoriesListbox;
         protected MyGuiControlGrid m_gridBlocks;
-  
+
         protected MyGuiControlScrollablePanel m_gridBlocksPanel;
         protected MyGuiControlLabel m_blocksLabel;
 
@@ -191,7 +193,7 @@ namespace Sandbox.Game.Gui
         protected const string SHIP_GROUPS_NAME = "Groups";
         protected const string CHARACTER_ANIMATIONS_GROUP_NAME = "CharacterAnimations";
 
-		protected MyStringHash manipulationToolId = MyStringHash.GetOrCompute("ManipulationTool");
+        protected MyStringHash manipulationToolId = MyStringHash.GetOrCompute("ManipulationTool");
 
         protected string[] m_forcedCategoryOrder = new string[] { "ShipWeaponsTools", "WeaponsTools", "CharacterTools", CHARACTER_ANIMATIONS_GROUP_NAME, SHIP_GROUPS_NAME };
 
@@ -278,6 +280,7 @@ namespace Sandbox.Game.Gui
                 if (m_onDropContextMenu.Enabled)
                 {
                     m_onDropContextMenu.Enabled = false;
+                    m_contextMenu.Enabled = false;
                     m_onDropContextMenu.Activate();
                 }
                 else if (m_contextMenu.Enabled && !m_onDropContextMenu.Visible)
@@ -367,7 +370,7 @@ namespace Sandbox.Game.Gui
             Init(objectBuilder);
 
             m_gridBlocks = (MyGuiControlGrid)Controls.GetControlByName("Grid");
-            
+
             m_categoriesListbox = (MyGuiControlListbox)Controls.GetControlByName("CategorySelector");
             m_categoriesListbox.VisualStyle = MyGuiControlListboxStyleEnum.ToolsBlocks;
             m_categoriesListbox.ItemClicked += categories_ItemClicked;
@@ -393,7 +396,7 @@ namespace Sandbox.Game.Gui
                     Keys = new MyKeys[] { (MyKeys)0x2C, (MyKeys)0x2E} //<, >
                 }
             };
-            
+
 
             // Remove the block grid (it will be inside scrollable panel)
             Controls.Remove(m_gridBlocks);
@@ -421,7 +424,7 @@ namespace Sandbox.Game.Gui
 
             m_blocksLabel = (MyGuiControlLabel)Controls.GetControlByName("BlocksLabel");
 
-            m_toolbarControl = (MyGuiControlToolbar) Activator.CreateInstance(MyPerGameSettings.GUI.ToolbarControl);
+            m_toolbarControl = (MyGuiControlToolbar)Activator.CreateInstance(MyPerGameSettings.GUI.ToolbarControl);
             m_toolbarControl.Position = new Vector2(0f, 0.49f);
             m_toolbarControl.OriginAlign = MyGuiDrawAlignEnum.HORISONTAL_CENTER_AND_VERTICAL_BOTTOM;
             if (MyPerGameSettings.Game == GameEnum.ME_GAME)
@@ -446,7 +449,7 @@ namespace Sandbox.Game.Gui
 
             if (m_screenCubeGrid != null && (m_shipController == null || (m_shipController != null && !m_shipController.BuildingMode)))
             {
-                bool isSeat = isShip && m_shipController != null && !m_shipController.EnableShipControl;               
+                bool isSeat = isShip && m_shipController != null && !m_shipController.EnableShipControl;
                 if (false == isSeat)
                 {
                     RecreateShipCategories(categoriesDefinitions, m_sortedCategories, m_screenCubeGrid);
@@ -462,7 +465,7 @@ namespace Sandbox.Game.Gui
 
                 if (m_shipController != null && m_shipController.ToolbarType != MyToolbarType.None)
                 {
-                    
+
                     //Ship doesn't have animations between blocks, but player needs to be able to use animations in ships
                     MyGuiBlockCategoryDefinition characterAnimationsDefinition = null;
                     if (false == m_sortedCategories.TryGetValue(CHARACTER_ANIMATIONS_GROUP_NAME, out characterAnimationsDefinition) &&
@@ -521,7 +524,7 @@ namespace Sandbox.Game.Gui
             }
 
             ProfilerShort.End();
-        }       
+        }
 
         private void OnItemDragged(MyGuiControlGrid sender, MyGuiControlGrid.EventArgs eventArgs)
         {
@@ -617,7 +620,7 @@ namespace Sandbox.Game.Gui
                         {
                             categories.Add(category.Value.Name, category.Value);
                         }
-                    } 
+                    }
                 }
             }
         }
@@ -708,13 +711,17 @@ namespace Sandbox.Game.Gui
             {
                 searchCondition.CleanDefinitionGroups();
             }
-            if (null != m_character || (m_shipController != null && (m_shipController as MyShipController).BuildingMode))
+            bool isSeat = m_shipController != null && !m_shipController.EnableShipControl;
+            if (!isSeat)
             {
-                AddCubeDefinitionsToBlocks(searchCondition);
-            }
-            else if (null != m_screenCubeGrid)
-            {
-                AddShipBlocksDefinitions(m_screenCubeGrid, true, searchCondition);
+                if (null != m_character || (m_shipController != null && (m_shipController as MyShipController).BuildingMode))
+                {
+                    AddCubeDefinitionsToBlocks(searchCondition);
+                }
+                else if (null != m_screenCubeGrid)
+                {
+                    AddShipBlocksDefinitions(m_screenCubeGrid, true, searchCondition);
+                }
             }
             m_gridBlocks.SelectedIndex = 0;
             m_gridBlocksPanel.ScrollbarVPosition = 0.0f;
@@ -792,8 +799,8 @@ namespace Sandbox.Game.Gui
         {
             if (!definition.Public && !MyFakes.ENABLE_NON_PUBLIC_BLOCKS)
                 return;
-			if (!definition.AvailableInSurvival && MySession.Static.SurvivalMode)
-				return;
+            if (!definition.AvailableInSurvival && MySession.Static.SurvivalMode)
+                return;
 
             var gridItem = new MyGuiControlGrid.Item(
                 icons: definition.Icons,
@@ -805,10 +812,12 @@ namespace Sandbox.Game.Gui
 
         protected virtual void AddDefinitionAtPosition(MyGuiControlGrid grid, MyDefinitionBase definition, Vector2I position, bool enabled = true, string subicon = null)
         {
+            if (definition == null)
+                return;
             if (!definition.Public && !MyFakes.ENABLE_NON_PUBLIC_BLOCKS)
                 return;
-			if (!definition.AvailableInSurvival && MySession.Static.SurvivalMode)
-				return;
+            if (!definition.AvailableInSurvival && MySession.Static.SurvivalMode)
+                return;
 
             var gridItem = new MyGuiControlGrid.Item(
                 icons: definition.Icons,
@@ -834,7 +843,7 @@ namespace Sandbox.Game.Gui
             {
                 SetOrReplaceItemOnPosition(grid, gridItem, position);
             }
-            else 
+            else
             {
                 if (grid.IsValidIndex(0, position.X))
                 {
@@ -883,15 +892,31 @@ namespace Sandbox.Game.Gui
                 if (null != searchCondition)
                 {
                     bool matchesCondition = false;
-                    for (int i = 0; i < group.SizeCount; ++i)
+                    for (int i = 0; i < group.SizeCount && !matchesCondition; ++i)
                     {
                         var def = group[(MyCubeSize)i];
                         if (MyFakes.ENABLE_NON_PUBLIC_BLOCKS || (def != null && def.Public && def.Enabled))
                         {
-                            if (null != def && (!MyFakes.ENABLE_GUI_HIDDEN_CUBEBLOCKS || def.GuiVisible) && true == searchCondition.MatchesCondition(def))
+                            if (null != def && (!MyFakes.ENABLE_GUI_HIDDEN_CUBEBLOCKS || def.GuiVisible))
                             {
-                                matchesCondition = true;
-                                break;
+                                if (true == searchCondition.MatchesCondition(def))
+                                {
+                                    matchesCondition = true;
+                                    break;
+                                }
+                                if (def.BlockStages != null && def.BlockStages.Length > 0)
+                                {
+                                    for (int j = 0; j < def.BlockStages.Count() && !matchesCondition; j++)
+                                    {
+                                        var defblock = MyDefinitionManager.Static.GetCubeBlockDefinition(def.BlockStages[j]);
+                                        if (defblock != null && true == searchCondition.MatchesCondition(defblock))
+                                        {
+                                            matchesCondition = true;
+                                            break;
+                                        }
+                                    }
+                                }
+
                             }
                         }
                     }
@@ -922,6 +947,19 @@ namespace Sandbox.Game.Gui
                     pos.Y = (int)(newItemPosition / (float)m_gridBlocks.ColumnsCount);
                     newItemPosition++;
                     AddCubeDefinition(m_gridBlocks, blockGroup, pos);
+                    var anyDef = MyFakes.ENABLE_NON_PUBLIC_BLOCKS ? blockGroup.Any : blockGroup.AnyPublic;
+                    if (anyDef.BlockStages != null && anyDef.BlockStages.Length > 0)
+                    {
+                        for (int i = 0; i < anyDef.BlockStages.Count(); i++)
+                        {
+                            pos.X = newItemPosition % m_gridBlocks.ColumnsCount;
+                            pos.Y = (int)(newItemPosition / (float)m_gridBlocks.ColumnsCount);
+                            newItemPosition++;
+                            var def = MyDefinitionManager.Static.GetCubeBlockDefinition(anyDef.BlockStages[i]);
+                            if (def != null)
+                                AddDefinitionAtPosition(m_gridBlocks, def, pos);
+                        }
+                    }
                 }
             }
         }
@@ -940,7 +978,18 @@ namespace Sandbox.Game.Gui
             string subicon = null;
             if (anyDef.BlockStages != null && anyDef.BlockStages.Length > 0)
                 subicon = MyToolbarItemCubeBlock.VariantsAvailableSubicon;
-            AddDefinitionAtPosition(grid, anyDef, position, MyToolbarComponent.GlobalBuilding || MySession.Static.ControlledEntity is MyCharacter || (MySession.Static.ControlledEntity is MyCockpit && (MySession.Static.ControlledEntity as MyCockpit).BuildingMode), subicon);
+
+            bool enabled = true;
+
+            if (MyCubeBuilder.Static != null)
+            {
+                enabled &= MyCubeBuilder.Static.IsCubeSizeAvailable(anyDef);
+            }
+
+            enabled &= MyToolbarComponent.GlobalBuilding || MySession.Static.ControlledEntity is MyCharacter ||
+                       (MySession.Static.ControlledEntity is MyCockpit && (MySession.Static.ControlledEntity as MyCockpit).BuildingMode);
+
+            AddDefinitionAtPosition(grid, anyDef, position, enabled, subicon);
         }
 
         #endregion
@@ -953,7 +1002,7 @@ namespace Sandbox.Game.Gui
             if (null == searchCondition || true == searchCondition.MatchesCondition(definition))
             {
                 AddWeaponDefinition(m_gridBlocks, definition);
-            } 
+            }
         }
 
         void AddTools(MyShipController shipController, IMySearchCondition searchCondition)
@@ -1049,7 +1098,7 @@ namespace Sandbox.Game.Gui
             ListReader<MyAiCommandDefinition> definitions = MyDefinitionManager.Static.GetDefinitionsOfType<MyAiCommandDefinition>();
             foreach (MyAiCommandDefinition definition in definitions)
             {
-				if ((definition.Public || MyFakes.ENABLE_NON_PUBLIC_BLOCKS) && (definition.AvailableInSurvival || MySession.Static.CreativeMode))
+                if ((definition.Public || MyFakes.ENABLE_NON_PUBLIC_BLOCKS) && (definition.AvailableInSurvival || MySession.Static.CreativeMode))
                 {
                     if (searchCondition != null && !searchCondition.MatchesCondition(definition))
                         continue;
@@ -1059,39 +1108,39 @@ namespace Sandbox.Game.Gui
             }
         }
 
-		private void AddAreaMarkerDefinitions(IMySearchCondition searchCondition)
-		{
+        private void AddAreaMarkerDefinitions(IMySearchCondition searchCondition)
+        {
             ListReader<MyAreaMarkerDefinition> definitions = MyDefinitionManager.Static.GetDefinitionsOfType<MyAreaMarkerDefinition>();
             foreach (MyAreaMarkerDefinition definition in definitions)
-			{
-				if ((definition.Public || MyFakes.ENABLE_NON_PUBLIC_BLOCKS) && (definition.AvailableInSurvival || MySession.Static.CreativeMode))
-				{
-					if (searchCondition != null && !searchCondition.MatchesCondition(definition))
-						continue;
+            {
+                if ((definition.Public || MyFakes.ENABLE_NON_PUBLIC_BLOCKS) && (definition.AvailableInSurvival || MySession.Static.CreativeMode))
+                {
+                    if (searchCondition != null && !searchCondition.MatchesCondition(definition))
+                        continue;
 
-					AddToolbarItemDefinition<MyObjectBuilder_ToolbarItemAreaMarker>(m_gridBlocks, definition);
-				}
-			}
-		}
+                    AddToolbarItemDefinition<MyObjectBuilder_ToolbarItemAreaMarker>(m_gridBlocks, definition);
+                }
+            }
+        }
 
-        void AddWeaponDefinition(MyGuiControlGrid grid, MyDefinitionBase definition, bool enabled=true)
-		{
-			if ((!definition.Public && !MyFakes.ENABLE_NON_PUBLIC_BLOCKS) || (!definition.AvailableInSurvival && MySession.Static.SurvivalMode))
-				return;
-			
-			{
-				MyObjectBuilder_ToolbarItemWeapon weaponData = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_ToolbarItemWeapon>();
-				weaponData.DefinitionId = definition.Id;
+        void AddWeaponDefinition(MyGuiControlGrid grid, MyDefinitionBase definition, bool enabled = true)
+        {
+            if ((!definition.Public && !MyFakes.ENABLE_NON_PUBLIC_BLOCKS) || (!definition.AvailableInSurvival && MySession.Static.SurvivalMode))
+                return;
 
-				var gridItem = new MyGuiControlGrid.Item(
-					icons: definition.Icons,
-					toolTip: definition.DisplayNameText,
-					userData: new GridItemUserData() { ItemData = weaponData },
+            {
+                MyObjectBuilder_ToolbarItemWeapon weaponData = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_ToolbarItemWeapon>();
+                weaponData.DefinitionId = definition.Id;
+
+                var gridItem = new MyGuiControlGrid.Item(
+                    icons: definition.Icons,
+                    toolTip: definition.DisplayNameText,
+                    userData: new GridItemUserData() { ItemData = weaponData },
                     enabled: enabled);
 
-				grid.Add(gridItem);
-			}
-		}
+                grid.Add(gridItem);
+            }
+        }
 
         void AddAnimationDefinition(MyGuiControlGrid grid, MyDefinitionBase definition)
         {
@@ -1128,7 +1177,7 @@ namespace Sandbox.Game.Gui
             AddDefinition(grid, agentData, definition);
         }
 
-        private void AddToolbarItemDefinition<T>(MyGuiControlGrid grid, MyDefinitionBase definition) where T: MyObjectBuilder_ToolbarItemDefinition, new()
+        private void AddToolbarItemDefinition<T>(MyGuiControlGrid grid, MyDefinitionBase definition) where T : MyObjectBuilder_ToolbarItemDefinition, new()
         {
             T objectBuilder = MyObjectBuilderSerializer.CreateNewObject<T>();
             objectBuilder.DefinitionId = definition.Id;
@@ -1195,7 +1244,7 @@ namespace Sandbox.Game.Gui
                 int remainder = w % nCols;
                 if (remainder == 0) remainder = nCols;
                 for (int i = 0; i < 2 * nCols - remainder; i++)
-                    if (v<m_gridBlocks.GetItemsCount())
+                    if (v < m_gridBlocks.GetItemsCount())
                         m_gridBlocks.SetItemAt(v++, new MyGuiControlGrid.Item(icon: "", toolTip: String.Empty, userData: new GridItemUserData() { ItemData = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_ToolbarItemEmpty>() }, enabled: false));
                     else
                         m_gridBlocks.Add(new MyGuiControlGrid.Item(icon: "", toolTip: String.Empty, userData: new GridItemUserData() { ItemData = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_ToolbarItemEmpty>() }, enabled: false));
@@ -1221,11 +1270,11 @@ namespace Sandbox.Game.Gui
                 {
                     continue;
                 }
-                if ( searchCondition != null && searchCondition.MatchesCondition(block.BlockDefinition) == false && searchCondition.MatchesCondition(block.CustomName.ToString()) == false)
+                if (searchCondition != null && searchCondition.MatchesCondition(block.BlockDefinition) == false && searchCondition.MatchesCondition(block.CustomName.ToString()) == false)
                 {
                     continue;
                 }
-				if (block.ShowInToolbarConfig == false || (!block.BlockDefinition.AvailableInSurvival && MySession.Static.SurvivalMode))
+                if (block.ShowInToolbarConfig == false || (!block.BlockDefinition.AvailableInSurvival && MySession.Static.SurvivalMode))
                 {
                     continue;
                 }
@@ -1254,7 +1303,7 @@ namespace Sandbox.Game.Gui
             {
                 return;
             }
-       
+
             m_allSelectedCategories.Clear();
             m_searchInBlockCategories.Clear();
 
@@ -1284,7 +1333,7 @@ namespace Sandbox.Game.Gui
             m_categorySearchCondition.SelectedCategories = m_searchInBlockCategories;
             UpdateGridBlocksBySearchCondition(isAllSelected ? null : m_categorySearchCondition);
         }
-     
+
         void grid_ItemClicked(MyGuiControlGrid sender, MyGuiControlGrid.EventArgs eventArgs)
         {
             m_voxelHandConfig.Visible = false;
@@ -1294,13 +1343,15 @@ namespace Sandbox.Game.Gui
                 var gridItem = sender.TryGetItemAt(eventArgs.RowIndex, eventArgs.ColumnIndex);
                 if (gridItem == null)
                     return;
+                if (!gridItem.Enabled)
+                    return;
 
                 var data = (GridItemUserData)gridItem.UserData;
                 var item = MyToolbarItemFactory.CreateToolbarItem(data.ItemData);
 
                 var vhitem = item as MyToolbarItemVoxelHand;
                 if (vhitem != null)
-                { 
+                {
                     m_voxelHandConfig.Visible = true;
                     m_voxelHandConfig.Item = vhitem;
                     m_voxelHandConfig.UpdateControls();
@@ -1313,6 +1364,9 @@ namespace Sandbox.Game.Gui
                 {
                     return;
                 }
+                if (!gridItem.Enabled)
+                    return;
+
                 var data = (GridItemUserData)gridItem.UserData;
                 var item = MyToolbarItemFactory.CreateToolbarItem(data.ItemData);
 
@@ -1321,9 +1375,9 @@ namespace Sandbox.Game.Gui
                     m_contextBlockX = eventArgs.RowIndex;
                     m_contextBlockY = eventArgs.ColumnIndex;
 
-                 
+
                     //if the item has no actions available, just send it to toolbar right away
-                    if (!UpdateContextMenu(ref m_contextMenu, item as MyToolbarItemActions,data))
+                    if (!UpdateContextMenu(ref m_contextMenu, item as MyToolbarItemActions, data))
                     {
                         grid_ItemDoubleClicked(sender, eventArgs);
                     }
@@ -1344,6 +1398,9 @@ namespace Sandbox.Game.Gui
                 var gridItem = sender.TryGetItemAt(eventArgs.RowIndex, eventArgs.ColumnIndex);
                 if (gridItem == null)
                     return;
+                if (!gridItem.Enabled)
+                    return;
+
                 var data = (GridItemUserData)gridItem.UserData;
                 var item = MyToolbarItemFactory.CreateToolbarItem(data.ItemData);
 
@@ -1362,6 +1419,8 @@ namespace Sandbox.Game.Gui
             {
                 var gridItem = sender.TryGetItemAt(eventArgs.RowIndex, eventArgs.ColumnIndex);
                 if (gridItem == null)
+                    return;
+                if (!gridItem.Enabled)
                     return;
 
                 var data = (GridItemUserData)gridItem.UserData;
@@ -1425,7 +1484,7 @@ namespace Sandbox.Game.Gui
                         DropGridItemToToolbar(item, eventArgs.DropTo.ItemIndex);
                         if (item.WantsToBeActivated)
                         {
-                            MyToolbarComponent.CurrentToolbar.ActivateItemAtSlot(eventArgs.DropTo.ItemIndex, playActivationSound:false);
+                            MyToolbarComponent.CurrentToolbar.ActivateItemAtSlot(eventArgs.DropTo.ItemIndex, playActivationSound: false);
                         }
                     }
                 }
@@ -1455,8 +1514,22 @@ namespace Sandbox.Game.Gui
             }
 
             m_nameSearchCondition.SearchName = searchName;
-            AddToolsAndAnimations(m_nameSearchCondition);
-            UpdateGridBlocksBySearchCondition(m_nameSearchCondition);
+            bool isSeat = m_shipController != null && !m_shipController.EnableShipControl;
+            if (!isSeat)
+            {
+                AddToolsAndAnimations(m_nameSearchCondition);
+                UpdateGridBlocksBySearchCondition(m_nameSearchCondition);
+            }
+            else
+                AddAnimations(true, m_nameSearchCondition);
+        }
+
+        /// <summary>
+        /// Updates Grid control with current category settings. 
+        /// </summary>
+        protected void UpdateGridControl()
+        {
+            categories_ItemClicked(m_categoriesListbox);
         }
 
         void contextMenu_ItemClicked(MyGuiControlContextMenu sender, MyGuiControlContextMenu.EventArgs args)
@@ -1553,7 +1626,7 @@ namespace Sandbox.Game.Gui
                 }
             });
         }
-        
+
         public static void RequestItemParameters(MyToolbarItem item, Action<bool> callback)
         {
             var itemTerminalBlock = item as MyToolbarItemTerminalBlock;
@@ -1607,6 +1680,9 @@ namespace Sandbox.Game.Gui
 
             var draggingItem = grid.GetItemAt(args.ItemIndex);
 
+            if (!draggingItem.Enabled)
+                return;
+
             m_dragAndDrop.StartDragging(dropHandlingType, args.Button, draggingItem, dragAndDropInfo);
             grid.HideToolTip();
         }
@@ -1615,7 +1691,7 @@ namespace Sandbox.Game.Gui
         {
             m_dragAndDrop.Stop();
         }
-        bool UpdateContextMenu(ref MyGuiControlContextMenu currentContextMenu, MyToolbarItemActions item,GridItemUserData data)
+        bool UpdateContextMenu(ref MyGuiControlContextMenu currentContextMenu, MyToolbarItemActions item, GridItemUserData data)
         {
             var actionList = item.PossibleActions(m_toolbarControl.ShownToolbar.ToolbarType);
             if (actionList.Count > 0)

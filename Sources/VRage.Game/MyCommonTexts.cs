@@ -1109,7 +1109,7 @@ using VRage.Utils;
         public static readonly MyStringId ToolTipVideoOptionsHardwareCursor = MyStringId.GetOrCompute("ToolTipVideoOptionsHardwareCursor");
 
         ///<summary>
-        ///Weather the cursor should be captured by the game window (for Windowed and Fullscreen Window modes).
+        ///Whether the cursor should be captured by the game window (for Windowed and Fullscreen Window modes).
         ///</summary>
         public static readonly MyStringId ToolTipVideoOptionsCaptureMouse = MyStringId.GetOrCompute("ToolTipVideoOptionsCaptureMouse");
 
@@ -1147,6 +1147,11 @@ using VRage.Utils;
         ///WARNING
         ///</summary>
         public static readonly MyStringId MessageBoxCaptionWarning = MyStringId.GetOrCompute("MessageBoxCaptionWarning");
+
+        ///<summary>
+        ///These mods were created in development version. They could cause issues in game
+        ///</summary>
+        public static readonly MyStringId MessageBoxModsMismatch = MyStringId.GetOrCompute("MessageBoxModsMismatch");
 
         ///<summary>
         ///This will open {0} in your internet browser. The game will keep running. Do you want to continue?
@@ -1739,6 +1744,11 @@ using VRage.Utils;
         public static readonly MyStringId MessageBoxTextYouHaveBeenKicked = MyStringId.GetOrCompute("MessageBoxTextYouHaveBeenKicked");
 
         ///<summary>
+        ///Paste operation failed, selected area is occupied.
+        ///</summary>
+        public static readonly MyStringId NotificationPasteFailed = MyStringId.GetOrCompute("NotificationPasteFailed");
+
+        ///<summary>
         ///Friends
         ///</summary>
         public static readonly MyStringId WorldSettings_OnlineModeFriends = MyStringId.GetOrCompute("WorldSettings_OnlineModeFriends");
@@ -1964,7 +1974,7 @@ using VRage.Utils;
         public static readonly MyStringId NotificationClientDisconnected = MyStringId.GetOrCompute("NotificationClientDisconnected");
 
         ///<summary>
-        ///Server has different version of the game. Your version: {0}; Server version: {1}
+        ///Server has different version of the game. Your version: {0}; Server version: {1}; You can change the branch, before launching the game, in game properties.
         ///</summary>
         public static readonly MyStringId MultiplayerError_IncorrectVersion = MyStringId.GetOrCompute("MultiplayerError_IncorrectVersion");
 
@@ -2484,6 +2494,11 @@ using VRage.Utils;
         public static readonly MyStringId WorldSettings_Mods = MyStringId.GetOrCompute("WorldSettings_Mods");
 
         ///<summary>
+        ///Advanced
+        ///</summary>
+        public static readonly MyStringId WorldSettings_Advanced = MyStringId.GetOrCompute("WorldSettings_Advanced");
+
+        ///<summary>
         ///Open selected mod in Workshop Steam Overlay
         ///</summary>
         public static readonly MyStringId ToolTipWorkshopOpenModInWorkshop = MyStringId.GetOrCompute("ToolTipWorkshopOpenModInWorkshop");
@@ -2504,7 +2519,7 @@ using VRage.Utils;
         public static readonly MyStringId JoinGame_SearchTooltip = MyStringId.GetOrCompute("JoinGame_SearchTooltip");
 
         ///<summary>
-        ///Downloading mods ... please wait.
+        ///Downloading mod 
         ///</summary>
         public static readonly MyStringId ProgressTextDownloadingMods = MyStringId.GetOrCompute("ProgressTextDownloadingMods");
 
@@ -2699,7 +2714,7 @@ using VRage.Utils;
         public static readonly MyStringId HudWarnings = MyStringId.GetOrCompute("HudWarnings");
 
         ///<summary>
-        ///This world can not be loaded. It has been created in newer version of the game.
+        ///This world cannot be loaded. It has been created in a newer version of the game or in a different branch of the game. You can change the branch, before launching the game, in game properties.
         ///</summary>
         public static readonly MyStringId DialogTextIncompatibleWorldVersion = MyStringId.GetOrCompute("DialogTextIncompatibleWorldVersion");
 
@@ -3484,6 +3499,16 @@ using VRage.Utils;
         public static readonly MyStringId ControlName_VoiceChat = MyStringId.GetOrCompute("ControlName_VoiceChat");
 
         ///<summary>
+        ///Cube size toggle button
+        ///</summary>
+        public static readonly MyStringId ControlName_CubeSizeMode = MyStringId.GetOrCompute("ControlName_CubeSizeMode");
+
+        ///<summary>
+        ///Press to switch between small and large sizes of a block
+        ///</summary>
+        public static readonly MyStringId ControlName_CubeSizeMode_Tooltip = MyStringId.GetOrCompute("ControlName_CubeSizeMode_Tooltip");
+
+        ///<summary>
         ///Enable voice chat
         ///</summary>
         public static readonly MyStringId EnableVoiceChat = MyStringId.GetOrCompute("EnableVoiceChat");
@@ -3492,6 +3517,11 @@ using VRage.Utils;
         ///Tonemapping
         ///</summary>
         public static readonly MyStringId ScreenGraphicsOptions_Tonemapping = MyStringId.GetOrCompute("ScreenGraphicsOptions_Tonemapping");
+
+        ///<summary>
+        ///Vegetation View Distance
+        ///</summary>
+        public static readonly MyStringId WorldSettings_VegetationDistance = MyStringId.GetOrCompute("WorldSettings_VegetationDistance");
 
         ///<summary>
         ///Grass density
@@ -3792,4 +3822,64 @@ using VRage.Utils;
         ///Download selected world to save games without loading it (Use to Edit Settings before playing world)
         ///</summary>
         public static readonly MyStringId ToolTipWorkshopCopyWorld = MyStringId.GetOrCompute("ToolTipWorkshopCopyWorld");
+
+        ///<summary>
+        ///Signals switched to normal display.
+        ///</summary>
+        public static readonly MyStringId SignalMode_Switch_DefaultMode = MyStringId.GetOrCompute("SignalMode_Switch_DefaultMode");
+
+        ///<summary>
+        ///Signals switched to fully visible.
+        ///</summary>
+        public static readonly MyStringId SignalMode_Switch_FullDisplay = MyStringId.GetOrCompute("SignalMode_Switch_FullDisplay");
+
+        ///<summary>
+        ///Signals switched to no names.
+        ///</summary>
+        public static readonly MyStringId SignalMode_Switch_NoNames = MyStringId.GetOrCompute("SignalMode_Switch_NoNames");
+
+        ///<summary>
+        ///Signals switched off.
+        ///</summary>
+        public static readonly MyStringId SignalMode_Switch_Off = MyStringId.GetOrCompute("SignalMode_Switch_Off");
+
+        ///<summary>
+        ///Cannot open or close the door. Check for blocking objects!
+        ///</summary>
+        public static readonly MyStringId Notification_CannotManipulateDoor = MyStringId.GetOrCompute("Notification_CannotManipulateDoor");
+
+        ///<summary>
+        ///Use contextual music
+        ///</summary>
+        public static readonly MyStringId AudioSettings_UseMusicController = MyStringId.GetOrCompute("AudioSettings_UseMusicController");
+
+        ///<summary>
+        ///Change block variants
+        ///</summary>
+        public static readonly MyStringId ControlName_ChangeBlockVariants = MyStringId.GetOrCompute("ControlName_ChangeBlockVariants");
+
+        ///<summary>
+        ///Skin
+        ///</summary>
+        public static readonly MyStringId ScreenOptionsGame_Skin = MyStringId.GetOrCompute("ScreenOptionsGame_Skin");
+
+        ///<summary>
+        ///Note: Not all screens support skin at the moment
+        ///</summary>
+        public static readonly MyStringId ScreenOptionsGame_SkinWarning = MyStringId.GetOrCompute("ScreenOptionsGame_SkinWarning");
+
+        ///<summary>
+        ///Animated block preview
+        ///</summary>
+        public static readonly MyStringId AnimatedRotation = MyStringId.GetOrCompute("AnimatedRotation");
+
+        ///<summary>
+        ///Show building size hint
+        ///</summary>
+        public static readonly MyStringId BuildingSizeHint = MyStringId.GetOrCompute("BuildingSizeHint");
+
+        ///<summary>
+        ///Speed based ship sounds
+        ///</summary>
+        public static readonly MyStringId AudioSettings_ShipSoundsBasedOnSpeed = MyStringId.GetOrCompute("AudioSettings_ShipSoundsBasedOnSpeed");
     }

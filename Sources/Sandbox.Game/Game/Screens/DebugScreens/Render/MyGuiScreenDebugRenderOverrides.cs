@@ -6,7 +6,10 @@ using VRageRender;
 
 namespace Sandbox.Game.Screens.DebugScreens
 {
-    [MyDebugScreen("Render", "Render Overrides")]
+
+#if !XB1
+
+    [MyDebugScreen("Render", "Overrides")]
     class MyGuiScreenDebugRenderOverrides : MyGuiScreenDebugBase
     {
         public override string GetFriendlyName()
@@ -27,19 +30,21 @@ namespace Sandbox.Game.Screens.DebugScreens
             m_currentPosition.Y += 0.01f;
             m_scale = 0.7f;
 
-            AddCaption("Render Overrides", Color.Yellow.ToVector4());
+            AddCaption("Overrides", Color.Yellow.ToVector4());
             AddShareFocusHint();
 
             m_currentPosition.Y += 0.01f;
             AddLabel("Lighting Pass", Color.Yellow.ToVector4(), 1.2f);
             m_lighting = AddCheckBox("Enabled", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.Lighting));
             m_sun = AddCheckBox("Sun", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.Sun));
-            m_additionalSuns = AddCheckBox("Additional Suns", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.AdditionalSuns));
+            m_backLight = AddCheckBox("Back light", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.BackLight));
             m_pointLights = AddCheckBox("Point lights", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.PointLights));
             m_spotLights = AddCheckBox("Spot lights", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.SpotLights));
+            m_envLight = AddCheckBox("Env light", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.EnvLight));
             m_currentPosition.Y += 0.01f;
-            AddCheckBox("Shadows", () => MyRenderProxy.Settings.EnableShadows, (newValue) => { MyRenderProxy.Settings.EnableShadows = newValue; });
+            AddCheckBox("Shadows", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.Shadows));
             AddCheckBox("Fog", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.Fog));
+            AddCheckBox("Flares", MyRenderProxy.DebugOverrides, MemberHelper.GetMember(() => MyRenderProxy.DebugOverrides.Flares));
 
             m_currentPosition.Y += 0.01f;
             AddLabel("Transparent Pass", Color.Yellow.ToVector4(), 1.2f);
@@ -65,9 +70,10 @@ namespace Sandbox.Game.Screens.DebugScreens
 
         private MyGuiControlCheckbox m_lighting;
         private MyGuiControlCheckbox m_sun;
-        private MyGuiControlCheckbox m_additionalSuns;
+        private MyGuiControlCheckbox m_backLight;
         private MyGuiControlCheckbox m_pointLights;
         private MyGuiControlCheckbox m_spotLights;
+        private MyGuiControlCheckbox m_envLight;
 
         private MyGuiControlCheckbox m_transparent;
         private MyGuiControlCheckbox m_oit;
@@ -90,9 +96,10 @@ namespace Sandbox.Game.Screens.DebugScreens
             MyRenderProxy.UpdateDebugOverrides();
 
             m_sun.Enabled = m_lighting.IsChecked;
-            m_additionalSuns.Enabled = m_lighting.IsChecked;
+            m_backLight.Enabled = m_lighting.IsChecked;
             m_pointLights.Enabled = m_lighting.IsChecked;
             m_spotLights.Enabled = m_lighting.IsChecked;
+            m_envLight.Enabled = m_lighting.IsChecked;
 
             m_oit.Enabled = m_transparent.IsChecked;
             m_billboardsDynamic.Enabled = m_transparent.IsChecked;
@@ -107,4 +114,6 @@ namespace Sandbox.Game.Screens.DebugScreens
             m_tonemapping.Enabled = m_postprocess.IsChecked;
         }
     }
+
+#endif
 }

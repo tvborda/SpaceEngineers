@@ -9,12 +9,12 @@ using Sandbox.Engine.Utils;
 using Sandbox.Game;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Screens.Helpers;
-using Sandbox.Graphics.Render;
 using SpaceEngineers.Game.GUI;
 using SpaceEngineers.Game.VoiceChat;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Sandbox.Engine.Voxels;
 using SpaceEngineers.Game.ModAPI;
 using VRage.Compiler;
 using VRage.Data.Audio;
@@ -29,6 +29,8 @@ namespace SpaceEngineers.Game
 {
     public partial class SpaceEngineersGame : MySandboxGame
     {
+        const int SE_VERSION = 01153003;
+
         #region Constructor
 
         public SpaceEngineersGame(VRageGameServices services, string[] commandlineArgs)
@@ -38,10 +40,21 @@ namespace SpaceEngineers.Game
         }
         #endregion
 
+        public static void SetupBasicGameInfo()
+        {
+            MyPerGameSettings.BasicGameInfo.GameVersion = SE_VERSION;
+
+            MyPerGameSettings.BasicGameInfo.GameName = "Space Engineers";
+            MyPerGameSettings.BasicGameInfo.GameNameSafe = "SpaceEngineers";
+            MyPerGameSettings.BasicGameInfo.ApplicationName = "SpaceEngineers";
+            MyPerGameSettings.BasicGameInfo.GameAcronym = "SE";
+            MyPerGameSettings.BasicGameInfo.MinimumRequirementsWeb = "http://www.spaceengineersgame.com";
+            MyPerGameSettings.BasicGameInfo.SplashScreenImage = "..\\Content\\Textures\\Logo\\splashscreen.png";
+        }
+
         public static void SetupPerGameSettings()
         {
             MyPerGameSettings.Game = GameEnum.SE_GAME;
-            MyPerGameSettings.GameName = "Space Engineers";
             MyPerGameSettings.GameIcon = "SpaceEngineers.ico";
             MyPerGameSettings.EnableGlobalGravity = false;
             MyPerGameSettings.GameModAssembly = "SpaceEngineers.Game.dll";
@@ -51,58 +64,14 @@ namespace SpaceEngineers.Game
             MySandboxGame.ConfigDedicated = new MyConfigDedicated<MyObjectBuilder_SessionSettings>("SpaceEngineers-Dedicated.cfg");
             MySandboxGame.GameCustomInitialization = new MySpaceGameCustomInitialization();
             MyPerGameSettings.ShowObfuscationStatus = false;
+            MyPerGameSettings.UseNewDamageEffects = true;
 
             //audio
-            MyPerGameSettings.UseVolumeLimiter = false;
+            MyPerGameSettings.UseVolumeLimiter = MyFakes.ENABLE_NEW_SOUNDS && MyFakes.ENABLE_REALISTIC_LIMITER;
             MyPerGameSettings.UseSameSoundLimiter = true;
             MyPerGameSettings.UseMusicController = true;
+            MyPerGameSettings.UseReverbEffect = true;
 
-            MyPerGameSettings.CreationSettings = new MyPlacementSettings()
-            {
-                SmallGrid = new MyGridPlacementSettings()
-                {
-                    Mode = MyGridPlacementSettings.SnapMode.OneFreeAxis,
-                    SearchHalfExtentsDeltaRatio = -0.1f,
-                    SearchHalfExtentsDeltaAbsolute = -0.13f, //this is value at whitch you can place new small ship and is ok for wheels too
-                    Penetration = new MyGridPlacementSettings.GroundPenetration()
-                    {
-                        Unit = MyGridPlacementSettings.PenetrationUnitEnum.Ratio,
-                        MinAllowed = 0f,
-                        MaxAllowed = 0.50f,
-                    },
-                    EnablePreciseRotationWhenSnapped = false,
-                },
-                LargeGrid = new MyGridPlacementSettings()
-                {
-                    Mode = MyGridPlacementSettings.SnapMode.OneFreeAxis,
-                    SearchHalfExtentsDeltaRatio = -0.1f,
-                    SearchHalfExtentsDeltaAbsolute = -0.13f,
-                    Penetration = new MyGridPlacementSettings.GroundPenetration()
-                    {
-                        Unit = MyGridPlacementSettings.PenetrationUnitEnum.Ratio,
-                        MinAllowed = 0f,
-                        MaxAllowed = 0.1f,
-                    },
-                    EnablePreciseRotationWhenSnapped = false,
-                },
-                LargeStaticGrid = new MyGridPlacementSettings()
-                {
-                    Mode = MyGridPlacementSettings.SnapMode.Base6Directions,
-                    SearchHalfExtentsDeltaRatio = -0.1f,
-                    SearchHalfExtentsDeltaAbsolute = -0.13f,
-                    Penetration = new MyGridPlacementSettings.GroundPenetration()
-                    {
-                        Unit = MyGridPlacementSettings.PenetrationUnitEnum.Ratio,
-                        MinAllowed = 0f,
-                        MaxAllowed = 0.85f,
-                    },
-                    EnablePreciseRotationWhenSnapped = true,
-                },
-                //StaticGridAlignToCenter = true,
-                StaticGridAlignToCenter = false,
-            };
-            //MyPerGameSettings.PastingSettings.StaticGridAlignToCenter = true;
-            MyPerGameSettings.BuildingSettings.LargeStaticGrid = MyPerGameSettings.CreationSettings.LargeStaticGrid;
             MyPerGameSettings.Destruction = false;
             //MyPerGameSettings.ConstantVoxelAmbient = -0.35f;
             MyFakes.ENABLE_SUN_BILLBOARD = true;
@@ -168,11 +137,11 @@ namespace SpaceEngineers.Game
 
             MyPerGameSettings.VoiceChatEnabled = false;
             MyPerGameSettings.VoiceChatLogic = typeof(MyVoiceChatLogic);
-            MyRenderSettings.PerInstanceLods = true;
+            MyRenderProxy.Settings.PerInstanceLods = false;
 
 			MyPerGameSettings.ClientStateType = typeof(MySpaceClientState);
             //MyFakes.ENABLE_HAVOK_MULTITHREADING = true;
-            MyFakes.USE_LOD1_VOXEL_PHYSICS = true;
+            MyVoxelPhysicsBody.UseLod1VoxelPhysics = true;
 
             MyPerGameSettings.EnableAi = true;
             MyPerGameSettings.EnablePathfinding = true;
@@ -181,50 +150,10 @@ namespace SpaceEngineers.Game
             MyFakesLocal.SetupLocalPerGameSettings();
         }
 
-		static void SetupRender()
+        [Obsolete]
+        // REMOVE-ME: Move all settings in the MyEnvironmentDefinition, and store them in MySector
+		public static void SetupRender()
 		{
-			// Video settings manager has not been initialized yet, so accessing config file directly.
-			if (MySandboxGame.Config != null && // Dedicated server calls this as first thing, even before it has loaded config ... doesn't need render though.
-				MySandboxGame.Config.GraphicsRenderer == MySandboxGame.DirectX11RendererKey)
-			{
-				MyPostProcessVolumetricSSAO2.MinRadius = 0.115f;
-				MyPostProcessVolumetricSSAO2.MaxRadius = 25;
-				MyPostProcessVolumetricSSAO2.RadiusGrowZScale = 1.007f;
-				MyPostProcessVolumetricSSAO2.Falloff = 3.08f;
-				MyPostProcessVolumetricSSAO2.Bias = 0.25f;
-				MyPostProcessVolumetricSSAO2.Contrast = 2.617f;
-				MyPostProcessVolumetricSSAO2.NormValue = 0.075f;
-
-				MyPostprocessSettingsWrapper.Settings.Brightness = 0;
-				MyPostprocessSettingsWrapper.Settings.Contrast = 0;
-				MyPostprocessSettingsWrapper.Settings.LuminanceExposure = 0.0f;
-				MyPostprocessSettingsWrapper.Settings.BloomExposure = 0;
-				MyPostprocessSettingsWrapper.Settings.BloomMult = 0.1f;
-				MyPostprocessSettingsWrapper.Settings.EyeAdaptationTau = 3;
-				MyPostprocessSettingsWrapper.Settings.MiddleGreyAt0 = 0.068f;
-				MyPostprocessSettingsWrapper.Settings.MiddleGreyCurveSharpness = 4.36f;
-				MyPostprocessSettingsWrapper.Settings.LogLumThreshold = -5.0f;
-                MyPostprocessSettingsWrapper.Settings.NightLogLumThreshold = MyPostprocessSettingsWrapper.Settings.LogLumThreshold;
-				MyPostprocessSettingsWrapper.Settings.BlueShiftRapidness = 0;
-				MyPostprocessSettingsWrapper.Settings.BlueShiftScale = 0;
-				MyPostprocessSettingsWrapper.Settings.Tonemapping_A = 0.147f;
-				MyPostprocessSettingsWrapper.Settings.Tonemapping_B = 0.120f;
-				MyPostprocessSettingsWrapper.Settings.Tonemapping_C = 0.321f;
-				MyPostprocessSettingsWrapper.Settings.Tonemapping_D = 0.699f;
-				MyPostprocessSettingsWrapper.Settings.Tonemapping_E = 0.001f;
-				MyPostprocessSettingsWrapper.Settings.Tonemapping_F = 0.160f;
-
-				MyPostprocessSettingsWrapper.PlanetSettings = MyPostprocessSettingsWrapper.Settings;
-				MyPostprocessSettingsWrapper.PlanetSettings.LuminanceExposure = 1.2f;
-
-                MyRenderProxy.Settings.ShadowCascadeCount = 6;
-			}
-
-			MyRenderProxy.Settings.ShadowFadeoutMultiplier = 0.0f;
-		    MyRenderProxy.Settings.UpdateCascadesEveryFrame = false;
-		    MyRenderProxy.Settings.ShadowCascadeMaxDistance = 8000f;
-		    MyRenderProxy.Settings.ShadowCascadeZOffset = 6000f;
-		    MyRenderProxy.Settings.ShadowCascadeSpreadFactor = 0f;
 		    MyRenderProxy.Settings.GrassMaxDrawDistance = 400;
             MyRenderProxy.Settings.DrawMergeInstanced = false;
 		}
@@ -468,6 +397,13 @@ namespace SpaceEngineers.Game
             MyGuiGameControlsHelpers.Add(MyControlsSpace.TOGGLE_SIGNALS, helper);
             MyControl control = new MyControl(MyControlsSpace.TOGGLE_SIGNALS, helper.NameEnum, MyGuiControlTypeEnum.Systems1, null, MyKeys.H, description: helper.DescriptionEnum);
             MyInput.Static.AddDefaultControl(MyControlsSpace.TOGGLE_SIGNALS, control);
-        }
+
+            // Add cube size build mode for cube builder control
+            helper = new MyGuiDescriptor(MyCommonTexts.ControlName_CubeSizeMode, MyCommonTexts.ControlName_CubeSizeMode_Tooltip);
+            MyGuiGameControlsHelpers.Add(MyControlsSpace.CUBE_BUILDER_CUBESIZE_MODE, helper);
+            control = new MyControl(MyControlsSpace.CUBE_BUILDER_CUBESIZE_MODE, helper.NameEnum, MyGuiControlTypeEnum.Systems3, null, MyKeys.R, description: helper.DescriptionEnum);
+            MyInput.Static.AddDefaultControl(MyControlsSpace.CUBE_BUILDER_CUBESIZE_MODE, control);
+
     }
+}
 }

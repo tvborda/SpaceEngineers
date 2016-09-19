@@ -162,7 +162,7 @@ namespace Sandbox.Game.Replication
                 return 0.0f;
             }
 
-            float priority = forClient.HasReplicable(Instance as IMyReplicable) && clientData.Dirty ? Instance.GetPriority(forClient) * Instance.PriorityScale() : 0.0f;
+            float priority = forClient.HasReplicable(Instance as IMyReplicable) && clientData.Dirty ? Instance.GetPriority(forClient,false) * Instance.PriorityScale() : 0.0f;
 
             if (priority < 0.01f && (clientData.ForceSend || clientData.FailedIncompletePackets.Count >0))
             {
@@ -426,7 +426,7 @@ namespace Sandbox.Game.Replication
             }
         }
 
-        public void Serialize(VRage.Library.Collections.BitStream stream, EndpointId forClient, uint timestamp, byte packetId, int maxBitPosition)
+        public bool Serialize(VRage.Library.Collections.BitStream stream, EndpointId forClient, uint timestamp, byte packetId, int maxBitPosition)
         {
             if (stream.Reading)
             {
@@ -436,6 +436,8 @@ namespace Sandbox.Game.Replication
             {
                 ProcessWrite(maxBitPosition, ref stream, forClient, packetId);
             }
+
+            return true;
         }
 
         private void SaveReplicable(StreamClientData clientData)

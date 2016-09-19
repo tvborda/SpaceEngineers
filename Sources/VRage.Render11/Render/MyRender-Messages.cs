@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using SharpDX.Direct3D11;
 using System.Windows.Forms;
+using VRageRender.Messages;
 
 namespace VRageRender
 {
@@ -88,7 +89,7 @@ namespace VRageRender
                     m_processStopwatch.Stop();
                     if (m_processStopwatch.Elapsed.TotalSeconds > 0.5f)
                     {
-#if !BLIT
+#if !XB1
                         //Debug.WriteLine("DoEvents()");
                         if (MyRenderProxy.EnableAppEventsCall)
                         {
@@ -128,7 +129,7 @@ namespace VRageRender
                         m_processStopwatch.Stop();
                         if (m_processStopwatch.Elapsed.TotalSeconds > 0.5f)
                         {
-#if !BLIT
+#if !XB1
                             //Debug.WriteLine("DoEvents()");
                             if (MyRenderProxy.EnableAppEventsCall)
                             {

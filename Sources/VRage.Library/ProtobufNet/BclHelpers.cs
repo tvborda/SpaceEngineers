@@ -1,7 +1,8 @@
-﻿using System;
+﻿#if !XB1 // XB1_NOPROTOBUF
+using System;
 using System.Reflection;
 
-#if BLIT
+#if XB1
 using System.Diagnostics;
 #endif
 
@@ -493,7 +494,7 @@ namespace ProtoBuf
         public static void WriteNetObject(object value, ProtoWriter dest, int key, NetObjectOptions options)
         {
 
-#if BLIT
+#if XB1
 			Debug.Assert(false);
 #else
 
@@ -552,7 +553,8 @@ namespace ProtoBuf
             ProtoWriter.EndSubItem(token, dest);
 #endif
 
-#endif //BLIT
+#endif //XB1
         }
     }
 }
+#endif // !XB1

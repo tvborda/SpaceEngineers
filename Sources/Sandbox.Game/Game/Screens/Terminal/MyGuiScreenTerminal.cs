@@ -20,21 +20,10 @@ using VRage.Library.Utils;
 using VRage.Utils;
 using VRageMath;
 using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 
 namespace Sandbox.Game.Gui
 {
-    public enum MyTerminalPageEnum
-    {
-        None =-2,
-        Properties = -1,
-        Inventory = 0,
-        ControlPanel = 1,
-        Production = 2,
-        Info = 3,
-        Factions = 4,
-        Gps = 6,
-    }
-
     public partial class MyGuiScreenTerminal : MyGuiScreenBase
     {
         public static event ScreenHandler ClosedCallback
@@ -148,8 +137,8 @@ namespace Sandbox.Game.Gui
                 //Inits of temporary panels
                 m_propertiesTopMenuParent = new MyGuiControlParent()
                 {
-                    Position = new Vector2(-0.614f, -0.487f),
-                    Size = new Vector2(0.3f, 0.15f),
+                    Position = new Vector2(-0.814f, -0.487f),
+                    Size = new Vector2(0.7f, 0.15f),
                     Name = "PropertiesPanel",
                     OriginAlign = MyGuiDrawAlignEnum.HORISONTAL_LEFT_AND_VERTICAL_TOP,
                 };
@@ -1048,9 +1037,22 @@ namespace Sandbox.Game.Gui
             infoPage.Controls.Add(list);
 
             var convertBtn = new MyGuiControlButton();
+            convertBtn.Position = new Vector2(0f, 0.06f);
             convertBtn.TextEnum = MySpaceTexts.TerminalTab_Info_ConvertButton;
+            convertBtn.SetToolTip(MySpaceTexts.TerminalTab_Info_ConvertButton_TT);
+            convertBtn.ShowTooltipWhenDisabled = true;
             convertBtn.Name = "ConvertBtn";
             infoPage.Controls.Add(convertBtn);
+
+            var convertToStationBtn = new MyGuiControlButton();
+            convertBtn.Position = new Vector2(0f, -0.06f);
+            convertToStationBtn.TextEnum = MySpaceTexts.TerminalTab_Info_ConvertToStationButton;
+            convertToStationBtn.SetToolTip(MySpaceTexts.TerminalTab_Info_ConvertToStationButton_TT);
+            convertToStationBtn.ShowTooltipWhenDisabled = true;
+            convertToStationBtn.Name = "ConvertToStationBtn";
+            convertToStationBtn.Visible = MySession.Static.EnableConvertToStation;
+            infoPage.Controls.Add(convertToStationBtn);
+            
 
             if (MyFakes.ENABLE_CENTER_OF_MASS)
             {

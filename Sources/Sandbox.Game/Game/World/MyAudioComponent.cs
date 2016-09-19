@@ -15,36 +15,47 @@ using VRage.Collections;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Library.Utils;
+using VRage.Profiler;
 using VRage.Utils;
 using VRageMath;
 
 namespace Sandbox.Game.World
 {
-    [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
+    [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
     public class MyAudioComponent : MySessionComponentBase
     {
-        public static ConcurrentDictionary<long, byte> ContactSoundsPool = new ConcurrentDictionary<long,byte>();
+        public static ConcurrentDictionary<long, byte> ContactSoundsPool = new ConcurrentDictionary<long, byte>();
         private static int m_updateCounter = 0;
         private const int POOL_CAPACITY = 30;
         private static MyConcurrentQueue<MyEntity3DSoundEmitter> m_singleUseEmitterPool = new MyConcurrentQueue<MyEntity3DSoundEmitter>(POOL_CAPACITY);
-        private static List<MyEntity3DSoundEmitter> m_borrowedEmittors = new List<MyEntity3DSoundEmitter>();
+        private static List<MyEntity3DSoundEmitter> m_borrowedEmitters = new List<MyEntity3DSoundEmitter>();
+        private static List<MyEntity3DSoundEmitter> m_emittersToRemove = new List<MyEntity3DSoundEmitter>();
         private static int m_currentEmitters;
+        private static List<MyEntity> m_detectedGrids = new List<MyEntity>();
 
-        public override void UpdateAfterSimulation()
+        public override void UpdateBeforeSimulation()
         {
-            base.UpdateAfterSimulation();
+            base.UpdateBeforeSimulation();
 
             m_updateCounter++;
-            //if(m_updateCounter % 100 == 0)
-            //    for (int i = 0; i < ContactSoundsPool.Count; i++)
-            //    {
-            //        var key = ContactSoundsPool.Keys.ElementAt(i);
-            //        if (ContactSoundsPool[key].Sound == null || !ContactSoundsPool[key].Sound.IsPlaying)
-            //        {
-            //            ContactSoundsPool.Remove(key);
-            //            i--;
-            //        }
-            //    }
+            if (m_updateCounter % 100 == 0 && MySession.Static.LocalCharacter != null)
+            {
+                m_detectedGrids.Clear();
+                BoundingSphereD playerSphere = new BoundingSphereD(MySession.Static.LocalCharacter.PositionComp.GetPosition(), 500f);
+                MyGamePruningStructure.GetAllTopMostEntitiesInSphere(ref playerSphere, m_detectedGrids);
+                for (int i = 0; i < m_detectedGrids.Count; i++)
+                {
+                    MyCubeGrid grid = m_detectedGrids[i] as MyCubeGrid;
+                    if (grid != null)
+                    {
+                        foreach (var block in grid.CubeBlocks)
+                        {
+                            if (block.FatBlock is MyFunctionalBlock)
+                                (block.FatBlock as MyFunctionalBlock).UpdateSoundEmitters();
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -54,11 +65,14 @@ namespace Sandbox.Game.World
         /// <returns>Emitter or null if none is avaliable in pool</returns>
         public static MyEntity3DSoundEmitter TryGetSoundEmitter()
         {
+            if (m_currentEmitters >= POOL_CAPACITY)
+                CheckEmitters();
+            if (m_emittersToRemove.Count > 0)
+                CleanUpEmitters();
+
             MyEntity3DSoundEmitter emitter = null;
             if (!m_singleUseEmitterPool.TryDequeue(out emitter))
             {
-                if (m_currentEmitters >= POOL_CAPACITY)
-                    CleanUpEmitters();
                 if (m_currentEmitters < POOL_CAPACITY)
                 {
                     emitter = new MyEntity3DSoundEmitter(null);
@@ -67,7 +81,7 @@ namespace Sandbox.Game.World
                 }
             }
             if (emitter != null)
-                m_borrowedEmittors.Add(emitter);
+                m_borrowedEmitters.Add(emitter);
             return emitter;
         }
 
@@ -75,31 +89,28 @@ namespace Sandbox.Game.World
         {
             if (emitter == null)
                 return;
-            emitter.Entity = null;
-            emitter.SoundId = new MyCueId(MyStringHash.NullOrEmpty);
-            if (m_borrowedEmittors.Count > 0)
+            m_emittersToRemove.Add(emitter);
+        }
+
+        private static void CheckEmitters()
+        {
+            for (int i = 0; i < m_borrowedEmitters.Count; i++)
             {
-                int index = m_borrowedEmittors.IndexOf(emitter);
-                if (index >= 0 && index < m_borrowedEmittors.Count)
-                    m_borrowedEmittors.RemoveAt(index);
+                if (m_borrowedEmitters[i] != null && !m_borrowedEmitters[i].IsPlaying)
+                    m_emittersToRemove.Add(m_borrowedEmitters[i]);
             }
-            m_singleUseEmitterPool.Enqueue(emitter);
         }
 
         private static void CleanUpEmitters()
         {
-            List<MyEntity3DSoundEmitter> emittersToReturn = new List<MyEntity3DSoundEmitter>();
-            for (int i = 0; i < m_borrowedEmittors.Count; i++)
+            for (int i = 0; i < m_emittersToRemove.Count; i++)
             {
-                if (m_borrowedEmittors[i] != null && !m_borrowedEmittors[i].IsPlaying)
-                    emittersToReturn.Add(m_borrowedEmittors[i]);
+                m_emittersToRemove[i].Entity = null;
+                m_emittersToRemove[i].SoundId = new MyCueId(MyStringHash.NullOrEmpty);
+                m_singleUseEmitterPool.Enqueue(m_emittersToRemove[i]);
+                m_borrowedEmitters.Remove(m_emittersToRemove[i]);
             }
-            foreach (MyEntity3DSoundEmitter emitter in emittersToReturn)
-            {
-                emitter_StoppedPlaying(emitter);
-                m_borrowedEmittors.Remove(emitter);
-            }
-            emittersToReturn.Clear();
+            m_emittersToRemove.Clear();
         }
 
         protected override void UnloadData()
@@ -113,10 +124,15 @@ namespace Sandbox.Game.World
         {
             ProfilerShort.Begin("GetCue");
 
-            MyEntity firstEntity;
+            MyEntity firstEntity = null;
             MyEntities.TryGetEntityById(entityId, out firstEntity);
+            if (firstEntity == null)
+            {
+                ProfilerShort.End();
+                return false;
+            }
 
-            MySoundPair cue = (firstEntity != null && firstEntity.Physics != null && firstEntity.Physics.IsStatic == false) ?
+            MySoundPair cue = (firstEntity.Physics != null && firstEntity.Physics.IsStatic == false) ?
                 MyMaterialPropertiesHelper.Static.GetCollisionCueWithMass(strID, materialA, materialB, ref volume, firstEntity.Physics.Mass, separatingVelocity) :
                 MyMaterialPropertiesHelper.Static.GetCollisionCue(strID, materialA, materialB);
 
@@ -152,15 +168,48 @@ namespace Sandbox.Game.World
                     emitter.StoppedPlaying += remove;
                 }
                 ProfilerShort.BeginNextBlock("PlaySound");
-                if(surfaceEntity != null)
+                bool inSpace = MySession.Static.Settings.RealisticSound && MyFakes.ENABLE_NEW_SOUNDS && MySession.Static.LocalCharacter != null && MySession.Static.LocalCharacter.AtmosphereDetectorComp.InVoid;
+                if (surfaceEntity != null && !inSpace)
                     emitter.Entity = surfaceEntity;
                 else
                     emitter.Entity = firstEntity;
                 emitter.SetPosition(position);
-                emitter.PlaySound(cue, true);
 
-                if (emitter.Sound != null && volume != 0)
-                    emitter.Sound.SetVolume(volume);
+                //GR: Changed stopPrevious argument to false due to bugs with explosion sound. May revision to the future
+                emitter.PlaySound(cue, false);
+
+                if (emitter.Sound != null)
+                    emitter.Sound.SetVolume(emitter.Sound.Volume * volume);
+
+                if (inSpace && surfaceEntity != null)
+                {
+                    MyEntity3DSoundEmitter emitter2 = MyAudioComponent.TryGetSoundEmitter();
+                    if (emitter2 == null)
+                    {
+                        ProfilerShort.End();
+                        return false;
+                    }
+                    ProfilerShort.BeginNextBlock("Emitter 2 lambdas");
+                    Action<MyEntity3DSoundEmitter> remove = null;
+                    remove = (e) =>
+                    {
+                        emitter2.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.CanHear].Remove(canHear);
+                        emitter2.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.ShouldPlay2D].Remove(shouldPlay2D);
+                        emitter2.StoppedPlaying -= remove;
+                    };
+                    emitter2.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.CanHear].Add(canHear);
+                    emitter2.EmitterMethods[MyEntity3DSoundEmitter.MethodsEnum.ShouldPlay2D].Add(shouldPlay2D);
+                    emitter2.StoppedPlaying += remove;
+
+                    ProfilerShort.BeginNextBlock("PlaySound");
+                    emitter2.Entity = surfaceEntity;
+                    emitter2.SetPosition(position);
+
+                    emitter2.PlaySound(cue, false);
+
+                    if (emitter2.Sound != null)
+                        emitter2.Sound.SetVolume(emitter2.Sound.Volume * volume);
+                }
 
                 ProfilerShort.End();
                 return true;

@@ -30,6 +30,7 @@ using VRage;
 using Sandbox.Engine.Multiplayer;
 using VRage.Network;
 using VRage.Game;
+using VRage.Sync;
 
 namespace Sandbox.Game.Entities
 {
@@ -61,12 +62,19 @@ namespace Sandbox.Game.Entities
         {
             get
             {
-                return base.DisassembleRatio * (Open ? 1.0f : CLOSED_DISSASEMBLE_RATIO);
+                //for now have the same dissasemble ratio maybe change again in the future
+                return base.DisassembleRatio * CLOSED_DISSASEMBLE_RATIO/* * (Open ? 1.0f : CLOSED_DISSASEMBLE_RATIO) */;
             }
         }
 
         public MyDoor()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_currOpening = SyncType.CreateAndAddProp<float>();
+            m_open = SyncType.CreateAndAddProp<bool>();
+#endif // XB1
+            CreateTerminalControls();
+
             m_currOpening.ValidateNever();
             m_currOpening.Value = 0f;
             m_currSpeed = 0f;
@@ -111,8 +119,11 @@ namespace Sandbox.Game.Entities
             get { return m_currOpening/MaxOpen; }
         }
 
-        static MyDoor()
+        static void CreateTerminalControls()
         {
+            if (MyTerminalControlFactory.AreControlsCreated<MyDoor>())
+                return;
+
             var open = new MyTerminalControlOnOffSwitch<MyDoor>("Open", MySpaceTexts.Blank, on: MySpaceTexts.BlockAction_DoorOpen, off: MySpaceTexts.BlockAction_DoorClosed);
             open.Getter = (x) => x.Open;
             open.Setter = (x, v) => x.SetOpenRequest(v, x.OwnerId);
@@ -120,7 +131,6 @@ namespace Sandbox.Game.Entities
             open.EnableOnOffActions();
             MyTerminalControlFactory.AddControl(open);
         }
-
 
         public void SetOpenRequest(bool open, long identityId)
         {
@@ -134,7 +144,7 @@ namespace Sandbox.Game.Entities
 
             if (relation.IsFriendly())
             {
-                m_open.Value = open;
+                Open = open;
             }
         }
 
@@ -268,7 +278,7 @@ namespace Sandbox.Game.Entities
             float speed = ((MyDoorDefinition)BlockDefinition).OpeningSpeed;
             m_currSpeed = m_open ? speed : -speed;
 
-            NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME;
             m_lastUpdateTime = MySandboxGame.TotalGamePlayTimeInMilliseconds;
             if (Sync.IsServer)
             {
@@ -288,11 +298,6 @@ namespace Sandbox.Game.Entities
 
             m_soundEmitter.StopSound(true);
             m_soundEmitter.PlaySingleSound(cuePair, true);
-        }
-
-        public override void UpdateBeforeSimulation100()
-        {
-            base.UpdateBeforeSimulation100();
         }
 
         public override void UpdateAfterSimulation()
@@ -355,12 +360,12 @@ namespace Sandbox.Game.Entities
             if (m_leftSubpart != null && m_leftSubpart.Physics != null)
             {
                 m_leftSubpart.PositionComp.LocalMatrix = Matrix.CreateTranslation(new Vector3(-opening, 0f, 0f));
-                if (m_leftSubpart.Physics.LinearVelocity != this.CubeGrid.Physics.LinearVelocity)
+                if (m_leftSubpart.Physics.LinearVelocity.Equals(CubeGrid.Physics.LinearVelocity, 0.01f) == false)
                 {
                     m_leftSubpart.Physics.LinearVelocity = this.CubeGrid.Physics.LinearVelocity;
                 }
 
-                if (m_leftSubpart.Physics.AngularVelocity != this.CubeGrid.Physics.AngularVelocity)
+                if (m_leftSubpart.Physics.AngularVelocity.Equals(this.CubeGrid.Physics.AngularVelocity, 0.01f) == false)
                 {
                     m_leftSubpart.Physics.AngularVelocity = this.CubeGrid.Physics.AngularVelocity;
                 }
@@ -369,12 +374,12 @@ namespace Sandbox.Game.Entities
             if (m_rightSubpart != null && m_rightSubpart.Physics != null)
             {
                 m_rightSubpart.PositionComp.LocalMatrix = Matrix.CreateTranslation(new Vector3(opening, 0f, 0f));
-                if (m_rightSubpart.Physics.LinearVelocity != this.CubeGrid.Physics.LinearVelocity)
+                if (m_rightSubpart.Physics.LinearVelocity.Equals(CubeGrid.Physics.LinearVelocity, 0.01f) == false)
                 {
                     m_rightSubpart.Physics.LinearVelocity = this.CubeGrid.Physics.LinearVelocity;
                 }
 
-                if (m_rightSubpart.Physics.AngularVelocity != this.CubeGrid.Physics.AngularVelocity)
+                if (m_rightSubpart.Physics.AngularVelocity.Equals(this.CubeGrid.Physics.AngularVelocity, 0.01f) == false)
                 {
                     m_rightSubpart.Physics.AngularVelocity = this.CubeGrid.Physics.AngularVelocity;
                 }

@@ -11,12 +11,13 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.Gui;
 using Sandbox.Game.Localization;
 using Sandbox.ModAPI.Ingame;
-using SpaceEngineers.Game.ModAPI.Ingame;
+using SpaceEngineers.Game.ModAPI;
 using VRage;
 using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.ModAPI;
+using VRage.Sync;
 using VRage.Utils;
 using VRageMath;
 
@@ -25,7 +26,7 @@ using VRageMath;
 namespace SpaceEngineers.Game.Entities.Blocks
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_SpaceBall))]
-    class MySpaceBall : MyFunctionalBlock, IMySpaceBall
+    public class MySpaceBall : MyFunctionalBlock, IMySpaceBall
     {
         #region Properties
 
@@ -96,8 +97,27 @@ namespace SpaceEngineers.Game.Entities.Blocks
         public const float REAL_MAXIMUM_RESTITUTION = 0.9f;
         public const float REAL_MINIMUM_MASS = 0.01f;
 
-        static MySpaceBall()
+        public MySpaceBall()
+            : base()
         {
+#if XB1 // XB1_SYNC_NOREFLECTION
+            m_friction = SyncType.CreateAndAddProp<float>();
+            m_virtualMass = SyncType.CreateAndAddProp<float>();
+            m_restitution = SyncType.CreateAndAddProp<float>();
+            m_broadcastSync = SyncType.CreateAndAddProp<bool>();
+#endif // XB1
+            CreateTerminalControls();
+
+            m_baseIdleSound.Init("BlockArtMass");
+            m_virtualMass.ValueChanged += (x) => RefreshPhysicsBody();
+            m_broadcastSync.ValueChanged += (x) => BroadcastChanged();
+        }
+
+        static void CreateTerminalControls()
+        {
+            if (MyTerminalControlFactory.AreControlsCreated<MySpaceBall>())
+                return;
+
             MyTerminalControlFactory.RemoveBaseClass<MySpaceBall, MyTerminalBlock>();
 
             var mass = new MyTerminalControlSlider<MySpaceBall>("VirtualMass", MySpaceTexts.BlockPropertyDescription_SpaceBallVirtualMass, MySpaceTexts.BlockPropertyDescription_SpaceBallVirtualMass);
@@ -135,14 +155,6 @@ namespace SpaceEngineers.Game.Entities.Blocks
             enableBroadcast.Setter = (x, v) => x.m_broadcastSync.Value = v;
             enableBroadcast.EnableAction();
             MyTerminalControlFactory.AddControl(enableBroadcast);
-        }
-
-        public MySpaceBall()
-            : base()
-        {
-            m_baseIdleSound.Init("BlockArtMass");
-            m_virtualMass.ValueChanged += (x) => RefreshPhysicsBody();
-            m_broadcastSync.ValueChanged += (x) => BroadcastChanged();
         }
 
         public override void Init(MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
@@ -323,12 +335,12 @@ namespace SpaceEngineers.Game.Entities.Blocks
             RadioBroadcaster.Enabled = m_broadcastSync;
         }
 
-        float IMyVirtualMass.VirtualMass
+        float ModAPI.Ingame.IMyVirtualMass.VirtualMass
         {
             get { return GetMass(); }
         }
 
-        bool IMySpaceBall.IsBroadcasting
+        bool ModAPI.Ingame.IMySpaceBall.IsBroadcasting
         {
             get { return (RadioBroadcaster == null) ? false : RadioBroadcaster.Enabled; }
         }

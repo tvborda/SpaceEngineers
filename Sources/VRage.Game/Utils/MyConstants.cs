@@ -19,7 +19,7 @@ namespace VRage.Game
         //  So I don't have to change this angle. I am assuming that this FOV is vertical angle, and above method calculates horizontal angle on aspect ratio. Thus users with
         //  wider aspect ratio (e.g. 3x16:10) will see bigger horizontal FOV, but same vertical FOV. And that's good.
         public static readonly float FIELD_OF_VIEW_CONFIG_MIN = MathHelper.ToRadians(40);
-        public static readonly float FIELD_OF_VIEW_CONFIG_MAX = MathHelper.ToRadians(90);
+        public static readonly float FIELD_OF_VIEW_CONFIG_MAX = MathHelper.ToRadians(140);
         public static readonly float FIELD_OF_VIEW_CONFIG_DEFAULT = MathHelper.ToRadians(70);
         public static readonly float FIELD_OF_VIEW_CONFIG_MAX_DUAL_HEAD = MathHelper.ToRadians(80);
         public static readonly float FIELD_OF_VIEW_CONFIG_MAX_TRIPLE_HEAD = MathHelper.ToRadians(70);
@@ -51,6 +51,7 @@ namespace VRage.Game
     public static class MyTextConstants
     {
         public static string SESSION_THUMB_NAME_AND_EXTENSION = "thumb.jpg";
+        public static string SESSION_SAVE_BACKUP_FOLDER = "Backup";
     }
 
     public static class MyHeadShakeConstants

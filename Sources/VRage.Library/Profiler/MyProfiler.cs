@@ -1,4 +1,5 @@
-﻿#region Using
+﻿#if !XB1 // XB1_NOPROFILER
+#region Using
 
 using System;
 using System.Collections.Generic;
@@ -285,6 +286,11 @@ namespace VRage.Profiler
             Debug.Assert(!EnableAsserts || OwnerThread == Thread.CurrentThread);
             Debug.Assert(m_currentProfilingStack.Count == 0, "ClearFrame cannot be called when there are some opened blocks, it must be outside blocks!");
 
+            m_currentProfilingStack.Clear();
+
+            if (m_blocksToAdd.Count > 0)
+                m_blocksToAdd.Clear();
+
             m_levelLimit = m_newLevelLimit;
 
             foreach (MyProfilerBlock profilerBlock in m_profilingBlocks.Values)
@@ -438,3 +444,4 @@ namespace VRage.Profiler
         }
     }
 }
+#endif // !XB1
