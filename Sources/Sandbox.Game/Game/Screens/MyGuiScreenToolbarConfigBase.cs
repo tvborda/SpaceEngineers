@@ -34,6 +34,8 @@ using VRage.Utils;
 using VRageMath;
 using VRage.Game.Entity;
 using VRage.Profiler;
+using Sandbox.Game.SessionComponents;
+using VRage.Audio;
 
 #endregion
 
@@ -128,6 +130,17 @@ namespace Sandbox.Game.Gui
             set { m_searchItems = value.Split(' '); }
         }
 
+        public bool IsValid
+        {
+            get { return m_searchItems != null; }
+        }
+
+        public void Clean()
+        {
+            m_searchItems = null;
+            CleanDefinitionGroups();
+        }
+
         public bool MatchesCondition(string itemId)
         {
             foreach (string item in m_searchItems)
@@ -214,8 +227,17 @@ namespace Sandbox.Game.Gui
 
         protected int m_onDropContextMenuToolbarIndex = -1;
         protected MyToolbarItem m_onDropContextMenuItem;
+        public enum GroupModes
+        {
+            Default = 0,
+            HideEmpty = 1,
+            HideBlockGroups = 2,
+            HideAll = 3
+        }
+        public static GroupModes GroupMode = GroupModes.Default;
+        private const int BLOCK_GROUPS_MIN_COUNT = 20;
 
-        protected class GridItemUserData
+        public class GridItemUserData
         {
             public MyObjectBuilder_ToolbarItem ItemData;
         }
@@ -268,6 +290,12 @@ namespace Sandbox.Game.Gui
             MyGuiScreenGamePlay.ActiveGameplayScreen = null;
         }
 
+        //anything that needs to be reseted after the session is unloaded
+        public static void Reset()
+        {
+            m_allSelectedCategories.Clear();
+        }
+
         public override void HandleInput(bool receivedFocusInThisUpdate)
         {
             base.HandleInput(receivedFocusInThisUpdate);
@@ -315,7 +343,7 @@ namespace Sandbox.Game.Gui
         {
             if (MyInput.Static.IsNewGameControlPressed(MyControlsSpace.PAUSE_GAME))
             {
-                MySandboxGame.UserPauseToggle();
+                MySandboxGame.PauseToggle();
             }
         }
 
@@ -477,7 +505,8 @@ namespace Sandbox.Game.Gui
             }
             else if (m_character != null || (m_shipController != null && m_shipController.BuildingMode))
             {
-                RecreateBlockCategories(categoriesDefinitions, m_sortedCategories);
+                if (GroupMode != GroupModes.HideAll)
+                    RecreateBlockCategories(categoriesDefinitions, m_sortedCategories);
                 AddCubeDefinitionsToBlocks(m_categorySearchCondition);
             }
 
@@ -577,8 +606,37 @@ namespace Sandbox.Game.Gui
         {
             categories.Clear();
             foreach (var category in loadedCategories)
+                category.Value.ValidItems = 0;
+            if (MyPerGameSettings.EnableResearch && (MySessionComponentResearch.Static.m_requiredResearch.Count > 0 || MySessionComponentResearch.Static.WhitelistMode))
             {
-                if (MySession.Static.SurvivalMode && !category.Value.AvailableInSurvival)
+                var keys = MyDefinitionManager.Static.GetDefinitionPairNames();
+                foreach (var key in keys)
+                {
+                    var group = MyDefinitionManager.Static.GetDefinitionGroup(key);
+                    if (IsValidItem(Vector2I.Zero, group) == false)
+                        continue;
+                    if (group.AnyPublic != null)
+                    {
+                        if (MySessionComponentResearch.Static.CanUse(m_character, group.AnyPublic.Id))
+                        {
+                            foreach (var category in loadedCategories.Values)
+                            {
+                                if (category.HasItem(group.AnyPublic.Id.ToString()))
+                                    category.ValidItems++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            var player = MyPlayer.GetPlayerFromCharacter(m_character);
+            if (player == null)
+                return;
+
+
+            foreach (var category in loadedCategories)
+            {             
+                if (MySession.Static.SurvivalMode && !category.Value.AvailableInSurvival && !MySession.Static.IsUserAdmin(player.Client.SteamUserId))
                     continue;
 
                 if (MySession.Static.CreativeMode && !category.Value.ShowInCreative)
@@ -586,6 +644,17 @@ namespace Sandbox.Game.Gui
 
                 if (!MyPerGameSettings.EnableResearch && category.Key.CompareTo("Schematics") == 0)
                     continue;
+
+                if (GroupMode == GroupModes.HideBlockGroups && !category.Value.IsAnimationCategory && !category.Value.IsToolCategory)
+                    continue;
+
+                if (GroupMode == GroupModes.HideEmpty && !category.Value.IsAnimationCategory && !category.Value.IsToolCategory)
+                {
+                    if (category.Value.ItemIds.Count == 0)
+                        continue;
+                    if (MyPerGameSettings.EnableResearch && (MySessionComponentResearch.Static.m_requiredResearch.Count > 0 || MySessionComponentResearch.Static.WhitelistMode) && category.Value.ValidItems == 0)
+                        continue;
+                }
 
                 if (true == category.Value.IsBlockCategory)
                 {
@@ -737,10 +806,16 @@ namespace Sandbox.Game.Gui
                 {
                     if (searchCondition != null && !searchCondition.MatchesCondition(definition))
                         continue;
+
                     var inventory = character.GetInventory() as MyInventory;
                     System.Diagnostics.Debug.Assert(inventory != null, "Null or unexpected inventory type returned");
-                    bool enabled = definition.Id.SubtypeId == manipulationToolId
-                        || ((inventory != null && inventory.ContainItems(1, definition.Id)) || MySession.Static.CreativeMode);
+
+                    bool enabled = definition.Id.SubtypeId == manipulationToolId || ((inventory != null && inventory.ContainItems(1, definition.Id)));
+
+                    if (MyPerGameSettings.EnableResearch && MySession.Static.CreativeMode && !enabled && !MySessionComponentResearch.Static.CanUse(m_character, definition.Id))//remove unresearched items that you do not have (creative only)
+                        continue;
+
+                    enabled |= MySession.Static.CreativeMode;
                     if (enabled || MyPerGameSettings.Game == GameEnum.SE_GAME)
                         AddWeaponDefinition(m_gridBlocks, definition, enabled);
                 }
@@ -752,7 +827,7 @@ namespace Sandbox.Game.Gui
                     AddAreaMarkerDefinitions(searchCondition);
                 }
 
-                if (!MySession.Static.SurvivalMode)
+                if (!MySession.Static.SurvivalMode || MySession.Static.IsUserAdmin(MyPlayer.GetPlayerFromCharacter(character).Client.SteamUserId))
                     AddVoxelHands(searchCondition);
 
                 if (MyFakes.ENABLE_PREFAB_THROWER)
@@ -813,6 +888,8 @@ namespace Sandbox.Game.Gui
         protected virtual void AddDefinitionAtPosition(MyGuiControlGrid grid, MyDefinitionBase definition, Vector2I position, bool enabled = true, string subicon = null)
         {
             if (definition == null)
+                return;
+            if (MyPerGameSettings.EnableResearch && !MySessionComponentResearch.Static.CanUse(m_character, definition.Id))
                 return;
             if (!definition.Public && !MyFakes.ENABLE_NON_PUBLIC_BLOCKS)
                 return;
@@ -882,6 +959,9 @@ namespace Sandbox.Game.Gui
                 var group = MyDefinitionManager.Static.GetDefinitionGroup(key);
                 var pos = MyDefinitionManager.Static.GetCubeBlockScreenPosition(key);
 
+                if (MyPerGameSettings.EnableResearch && MySessionComponentResearch.Static.WhitelistMode && MySessionComponentResearch.Static.m_requiredResearch.Count < BLOCK_GROUPS_MIN_COUNT)
+                    pos = new Vector2I(-1, -1);
+
                 if (false == IsValidItem(pos, group))
                 {
                     continue;
@@ -897,9 +977,9 @@ namespace Sandbox.Game.Gui
                         var def = group[(MyCubeSize)i];
                         if (MyFakes.ENABLE_NON_PUBLIC_BLOCKS || (def != null && def.Public && def.Enabled))
                         {
-                            if (null != def && (!MyFakes.ENABLE_GUI_HIDDEN_CUBEBLOCKS || def.GuiVisible))
+                            if (null != def)//&& (!MyFakes.ENABLE_GUI_HIDDEN_CUBEBLOCKS || def.GuiVisible))
                             {
-                                if (true == searchCondition.MatchesCondition(def))
+                                if (true == searchCondition.MatchesCondition(def) && (!MyFakes.ENABLE_GUI_HIDDEN_CUBEBLOCKS || def.GuiVisible || searchCondition is MySearchByStringCondition))
                                 {
                                     matchesCondition = true;
                                     break;
@@ -939,6 +1019,8 @@ namespace Sandbox.Game.Gui
             {
                 HashSet<MyCubeBlockDefinitionGroup> sortedSelectedBlocks = searchCondition.GetSortedBlocks();
                 int newItemPosition = 0;
+                bool noPosition = (MyPerGameSettings.EnableResearch && MySessionComponentResearch.Static.WhitelistMode && MySessionComponentResearch.Static.m_requiredResearch.Count < BLOCK_GROUPS_MIN_COUNT);
+                Vector2I defualtPos = new Vector2I(-1, -1);
 
                 foreach (var blockGroup in sortedSelectedBlocks)
                 {
@@ -946,9 +1028,9 @@ namespace Sandbox.Game.Gui
                     pos.X = newItemPosition % m_gridBlocks.ColumnsCount;
                     pos.Y = (int)(newItemPosition / (float)m_gridBlocks.ColumnsCount);
                     newItemPosition++;
-                    AddCubeDefinition(m_gridBlocks, blockGroup, pos);
+                    AddCubeDefinition(m_gridBlocks, blockGroup, noPosition ? defualtPos : pos);
                     var anyDef = MyFakes.ENABLE_NON_PUBLIC_BLOCKS ? blockGroup.Any : blockGroup.AnyPublic;
-                    if (anyDef.BlockStages != null && anyDef.BlockStages.Length > 0)
+                    if (anyDef.BlockStages != null && anyDef.BlockStages.Length > 0 && searchCondition is MySearchByCategoryCondition)
                     {
                         for (int i = 0; i < anyDef.BlockStages.Count(); i++)
                         {
@@ -957,7 +1039,7 @@ namespace Sandbox.Game.Gui
                             newItemPosition++;
                             var def = MyDefinitionManager.Static.GetCubeBlockDefinition(anyDef.BlockStages[i]);
                             if (def != null)
-                                AddDefinitionAtPosition(m_gridBlocks, def, pos);
+                                AddDefinitionAtPosition(m_gridBlocks, def, pos, MyCubeBuilder.Static.IsCubeSizeAvailable(def));
                         }
                     }
                 }
@@ -981,10 +1063,10 @@ namespace Sandbox.Game.Gui
 
             bool enabled = true;
 
-            if (MyCubeBuilder.Static != null)
-            {
-                enabled &= MyCubeBuilder.Static.IsCubeSizeAvailable(anyDef);
-            }
+            //if (MyCubeBuilder.Static != null)
+            //{
+            //    enabled &= MyCubeBuilder.Static.IsCubeSizeAvailable(anyDef);
+            //}
 
             enabled &= MyToolbarComponent.GlobalBuilding || MySession.Static.ControlledEntity is MyCharacter ||
                        (MySession.Static.ControlledEntity is MyCockpit && (MySession.Static.ControlledEntity as MyCockpit).BuildingMode);
@@ -1331,7 +1413,7 @@ namespace Sandbox.Game.Gui
             AddToolsAndAnimations(m_categorySearchCondition);
 
             m_categorySearchCondition.SelectedCategories = m_searchInBlockCategories;
-            UpdateGridBlocksBySearchCondition(isAllSelected ? null : m_categorySearchCondition);
+            UpdateGridBlocksBySearchCondition(isAllSelected ? m_nameSearchCondition.IsValid ? (IMySearchCondition)m_nameSearchCondition : null : (IMySearchCondition)m_categorySearchCondition);
         }
 
         void grid_ItemClicked(MyGuiControlGrid sender, MyGuiControlGrid.EventArgs eventArgs)
@@ -1510,6 +1592,7 @@ namespace Sandbox.Game.Gui
                 {
                     AddShipBlocksDefinitions(m_screenCubeGrid, true, null);
                 }
+                m_nameSearchCondition.Clean();
                 return;
             }
 

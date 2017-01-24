@@ -60,7 +60,7 @@ namespace Sandbox.Game.Entities
 
         public bool IsAllowed(MyDefinitionId itemId)
         {
-			if (!Enabled || !IsFunctional || !IsWorking || !ResourceSink.IsPowered)
+			if (!Enabled || !IsFunctional || !IsWorking || !ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId))
                 return false;
 
             return m_inventoryConstraint.Check(itemId);
@@ -132,11 +132,11 @@ namespace Sandbox.Game.Entities
             }
         }
 
-        static void CreateTerminalControls()
+        protected override void CreateTerminalControls()
         {
             if (MyTerminalControlFactory.AreControlsCreated<MyConveyorSorter>())
                 return;
-
+            base.CreateTerminalControls();
             drainAll = new MyTerminalControlOnOffSwitch<MyConveyorSorter>("DrainAll", MySpaceTexts.Terminal_DrainAll);
             drainAll.Getter = (block) => block.DrainAll;
             drainAll.Setter = (block, val) => block.DrainAll = val;
@@ -323,7 +323,7 @@ namespace Sandbox.Game.Entities
             DetailedInfo.Append(BlockDefinition.DisplayNameText);
             DetailedInfo.Append("\n");
             DetailedInfo.AppendStringBuilder(MyTexts.Get(MySpaceTexts.BlockPropertyProperties_CurrentInput));
-			MyValueFormatter.AppendWorkInBestUnit(ResourceSink.IsPowered ? ResourceSink.RequiredInput : 0, DetailedInfo);
+            MyValueFormatter.AppendWorkInBestUnit(ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId) ? ResourceSink.RequiredInputByType(MyResourceDistributorComponent.ElectricityId) : 0, DetailedInfo);
             DetailedInfo.Append("\n");
             RaisePropertiesChanged();
         }
@@ -487,6 +487,8 @@ namespace Sandbox.Game.Entities
         }
         protected override void OnEnabledChanged()
         {
+            //GR: this is taking a long time but is needed when sorter is enabled/disabled
+            CubeGrid.GridSystems.ConveyorSystem.FlagForRecomputation();
 			ResourceSink.Update();
             UpdateText();
             UpdateEmissivity();
@@ -551,7 +553,7 @@ namespace Sandbox.Game.Entities
         public override void UpdateBeforeSimulation100()
         {
             base.UpdateBeforeSimulation100();
-			if (!Sync.IsServer || !DrainAll || !Enabled || !IsFunctional || !IsWorking || !ResourceSink.IsPowered)
+            if (!Sync.IsServer || !DrainAll || !Enabled || !IsFunctional || !IsWorking || !ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId))
                 return;
 
             if (!this.GetInventory().IsFull)
@@ -563,7 +565,7 @@ namespace Sandbox.Game.Entities
         public override void UpdateBeforeSimulation10()
         {
             base.UpdateBeforeSimulation10();
-			if (!Sync.IsServer || !DrainAll || !Enabled || !IsFunctional || !IsWorking || !ResourceSink.IsPowered)
+            if (!Sync.IsServer || !DrainAll || !Enabled || !IsFunctional || !IsWorking || !ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId))
                 return;
 
             m_pushRequestFrameCounter++;
@@ -627,7 +629,7 @@ namespace Sandbox.Game.Entities
             if (!InScene)
                 return;
 
-			Color newColor = Enabled && IsFunctional && IsWorking && ResourceSink.IsPowered ? Color.GreenYellow : Color.DarkRed;
+            Color newColor = Enabled && IsFunctional && IsWorking && ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId) ? Color.GreenYellow : Color.DarkRed;
             MyCubeBlock.UpdateEmissiveParts(Render.RenderObjectIDs[0], 1.0f, newColor, Color.White);
         }
 

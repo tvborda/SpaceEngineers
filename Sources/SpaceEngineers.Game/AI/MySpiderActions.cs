@@ -209,11 +209,16 @@ namespace SpaceEngineers.Game.AI
                 var character = entity as MyCharacter;
                 var grid = entity as MyCubeGrid;
 
-                if (character != null)
+                if (character != null && character.ControllerInfo != null)
                 {
                     var faction = MySession.Static.Factions.GetPlayerFaction(character.ControllerInfo.ControllingIdentityId);
                     if (myFaction != null && faction == myFaction) continue;
                     if (character.IsDead) continue;
+
+                    //if character fly up exclude him from targets
+                    var result = Sandbox.Engine.Physics.MyPhysics.CastRay(character.WorldMatrix.Translation - 3 * character.WorldMatrix.Up, character.WorldMatrix.Translation + 3 * character.WorldMatrix.Up, Sandbox.Engine.Physics.MyPhysics.CollisionLayers.DefaultCollisionLayer);
+                    if (result == null || (result as VRage.Game.ModAPI.IHitInfo).HitEntity == character)
+                        continue;
 
                     entityPriority = 1;
 
@@ -286,17 +291,17 @@ namespace SpaceEngineers.Game.AI
             priority.IntValue = bestPriority;
 
             // CH: TODO: This is temporary. Remove it!
-            if (outTarget.TargetType == MyAiTargetEnum.CUBE)
-            {
-                MyEntity outGrid;
-                MyEntities.TryGetEntityById(outTarget.EntityId.Value, out outGrid);
-                Debug.Assert(outGrid != null);
-                var grid = outGrid as MyCubeGrid;
-                MySlimBlock block = grid.GetCubeBlock(outTarget.BlockPosition);
-                Debug.Assert(block != null);
+            //if (outTarget.TargetType == MyAiTargetEnum.CUBE)
+            //{
+            //    MyEntity outGrid;
+            //    MyEntities.TryGetEntityById(outTarget.EntityId.Value, out outGrid);
+            //    Debug.Assert(outGrid != null);
+            //    var grid = outGrid as MyCubeGrid;
+            //    MySlimBlock block = grid.GetCubeBlock(outTarget.BlockPosition);
+            //    Debug.Assert(block != null);
 
-                //MyTrace.Send(TraceWindow.Ai, "TARGETTING CUBE: " + grid.ToString() + " " + block.ToString());
-            }
+            //    //MyTrace.Send(TraceWindow.Ai, "TARGETTING CUBE: " + grid.ToString() + " " + block.ToString());
+            //}
 
             return retval;
         }

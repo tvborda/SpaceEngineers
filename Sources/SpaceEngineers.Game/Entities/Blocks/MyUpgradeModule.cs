@@ -44,7 +44,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
         {
             base.Init(builder, cubeGrid);
 
-            NeedsUpdate |= MyEntityUpdateEnum.EACH_FRAME | MyEntityUpdateEnum.EACH_10TH_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME;
+            NeedsUpdate |= MyEntityUpdateEnum.EACH_100TH_FRAME;
 
             m_connectedBlocks = new Dictionary<ConveyorLinePosition, MyCubeBlock>();
             m_dummies = new SortedDictionary<string,MyModelDummy>(VRage.Game.Models.MyModels.GetModelOnlyDummies(BlockDefinition.Model).Dummies);
@@ -98,20 +98,18 @@ namespace SpaceEngineers.Game.Entities.Blocks
             CubeGrid.OnBlockRemoved += CubeGrid_OnBlockRemoved;
         }
 
-        public override void UpdateAfterSimulation()
+        public override void UpdateBeforeSimulation100()
         {
-            base.UpdateAfterSimulation();
+            base.UpdateBeforeSimulation100();
+            if (m_soundEmitter == null)
+                return;
 
             if (m_needsRefresh)
             {
                 RefreshConnections();
                 m_needsRefresh = false;
             }
-        }
-
-        public override void UpdateAfterSimulation10()
-        {
-            base.UpdateAfterSimulation10();
+ 
             if (CubeGrid.GridSystems.ResourceDistributor.ResourceState != m_oldResourceState)
             {
                 m_oldResourceState = CubeGrid.GridSystems.ResourceDistributor.ResourceState;
@@ -119,17 +117,11 @@ namespace SpaceEngineers.Game.Entities.Blocks
             }
 
             m_oldResourceState = CubeGrid.GridSystems.ResourceDistributor.ResourceState;
-        }
 
-        public override void UpdateBeforeSimulation100()
-        {
-            base.UpdateBeforeSimulation100();
-            if (m_soundEmitter == null)
-                return;
             bool powered = false;
             foreach(var block in m_connectedBlocks.Values)
             {
-                powered |= block != null && block.ResourceSink != null && block.ResourceSink.IsPowered && block.IsWorking;
+                powered |= block != null && block.ResourceSink != null && block.ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId) && block.IsWorking;
                 if (powered)
                     break;
             }
@@ -321,9 +313,14 @@ namespace SpaceEngineers.Game.Entities.Blocks
             {
                 return;
             }
-
+            
+            // Check which port of the upgrade module is connected to something
+            // and display red emissivity if it's disconnected...
+            // and display green emissivity if it's connected.
             for (int i = 0; i < m_connectionPositions.Length; i++)
             {
+                // in our case upgrade port 1 and 2 are tied to emissive material names Emissive0 and Emissive1
+                // seems like it is possible to add more upgrade ports by this implementation
                 string emissiveName = "Emissive" + i.ToString();
                 Color color = Color.Green;
 

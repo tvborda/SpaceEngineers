@@ -18,6 +18,7 @@ using VRage.Collections;
 using VRage.Game.Definitions;
 using VRage.Profiler;
 using VRageMath;
+using Sandbox.Graphics;
 
 namespace Sandbox.Game.World
 {
@@ -69,10 +70,21 @@ namespace Sandbox.Game.World
 
             LoadGameDefinition(checkpoint);
 
+            var fonts = MyDefinitionManager.Static.GetFontDefinitions();
+            foreach (var font in fonts)
+            {
+                if (!MyGuiManager.FontExists(font.Id.SubtypeId.String))
+                {
+                    VRageRender.MyRenderProxy.CreateFont((int)font.Id.SubtypeId, font.Path, false);
+                }
+            }
+
+
             MyDefinitionManager.Static.TryGetDefinition<MyScenarioDefinition>(checkpoint.Scenario, out Scenario);
 
-            FixIncorrectSettings(Settings);
             WorldBoundaries = checkpoint.WorldBoundaries;
+
+            FixIncorrectSettings(Settings);
 
             // Use whatever setting is in scenario if there was nothing in the file (0 min and max).
             // SE scenarios have nothing while ME scenarios have size defined.
@@ -194,6 +206,7 @@ namespace Sandbox.Game.World
             m_sessionComponents[component.ComponentType] = component;
             component.Session = this;
             AddComponentForUpdate(updateOrder, component);
+            m_sessionComponents.ApplyChanges();
         }
 
         public void UnregisterComponent(MySessionComponentBase component)
@@ -217,7 +230,7 @@ namespace Sandbox.Game.World
             foreach (Type type in MyAssembly.GetTypes())
 #else // !XB1
             MySandboxGame.Log.WriteLine("Registered modules from: " + assembly.FullName);
-            
+
             foreach (Type type in assembly.GetTypes())
 #endif // !XB1
             {
@@ -234,26 +247,14 @@ namespace Sandbox.Game.World
             {
                 MyDefinitionId? definition = default(MyDefinitionId?);
 
-                if (MyFakes.ENABLE_LOAD_NEEDED_SESSION_COMPONENTS)
+                var component = (MySessionComponentBase)Activator.CreateInstance(type);
+                Debug.Assert(component != null, "Session component cannot be created by activator");
+
+                if (component.IsRequiredByGame || modAssembly || GetComponentInfo(type, out definition))
                 {
-                    var component = (MySessionComponentBase)Activator.CreateInstance(type);
-                    Debug.Assert(component != null, "Session component is cannot be created by activator");
-
-                    if (component.IsRequiredByGame)
-                    {
-                        RegisterComponent(component, component.UpdateOrder, component.Priority);
-
-                        GetComponentInfo(type, out definition);
-                        component.Definition = definition;
-                    }
-                }
-                else if (modAssembly || GetComponentInfo(type, out definition))
-                {
-                    var component = (MySessionComponentBase)Activator.CreateInstance(type);
-                    Debug.Assert(component != null, "Session component is cannot be created by activator");
-
                     RegisterComponent(component, component.UpdateOrder, component.Priority);
 
+                    GetComponentInfo(type, out definition);
                     component.Definition = definition;
                 }
             }
@@ -454,8 +455,6 @@ namespace Sandbox.Game.World
         {
             Static.TotalDamageDealt = 0;
             Static.TotalBlocksCreated = 0;
-            Static.sessionSimSpeedPlayer = 0f;
-            Static.sessionSimSpeedServer = 0f;
 
             ElapsedPlayTime = new TimeSpan();
             m_timeOfSave = MySandboxGame.Static.UpdateTime;

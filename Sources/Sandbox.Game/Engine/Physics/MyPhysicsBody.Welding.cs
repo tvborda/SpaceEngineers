@@ -57,6 +57,9 @@ namespace Sandbox.Engine.Physics
         {
             public MyPhysicsBody Parent = null;
             public Matrix Transform = Matrix.Identity;
+            /// <summary>
+            /// This does NOT contain all welded bodies, see @MyWeldGroupData
+            /// </summary>
             public readonly HashSet<MyPhysicsBody> Children = new HashSet<MyPhysicsBody>();
             public HkMassElement MassElement;
 
@@ -132,8 +135,6 @@ namespace Sandbox.Engine.Physics
                 thisShape = GetShape();
 
             other.Deactivate();
-
-            //other.RemoveConstraints(other.RigidBody);//jn:TODO check if this is OK
 
             var transform = other.Entity.WorldMatrix*Entity.WorldMatrixInvScaled;
             other.WeldInfo.Transform = transform;
@@ -242,6 +243,10 @@ namespace Sandbox.Engine.Physics
                     var transformShape = new HkTransformShape(child.WeldedRigidBody.GetShape(), ref child.WeldInfo.Transform);
                     HkShape.SetUserData(transformShape, child.WeldedRigidBody);
                     m_tmpShapeList.Add(transformShape);
+
+                    //TODO:this saves from crash but disables the collision of excessive entities
+                    if(m_tmpShapeList.Count == HkSmartListShape.MaxChildren)
+                        break;
                     //m_tmpElements.Add(child.WeldInfo.MassElement);
                 }
                 //var list = new HkListShape(m_tmpShapeList.ToArray(), HkReferencePolicy.None);

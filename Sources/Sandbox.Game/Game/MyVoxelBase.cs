@@ -17,6 +17,7 @@ using Sandbox.Game.World;
 using Sandbox.Engine.Multiplayer;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Multiplayer;
+using Sandbox.Game.Gui;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI.Interfaces;
 using VRage.Game.ModAPI;
@@ -133,6 +134,7 @@ namespace Sandbox.Game.Entities
             protected set
             {
                 m_contentChanged = value;
+                //TODO: alwawys set false?
                 BeforeContentChanged = false;
             }
 
@@ -208,6 +210,7 @@ namespace Sandbox.Game.Entities
         }
 
         abstract public void Init(MyObjectBuilder_EntityBase builder, Sandbox.Engine.Voxels.IMyStorage storage);
+
         public void Init(string storageName, Sandbox.Engine.Voxels.IMyStorage storage, Vector3D positionMinCorner)
         {
             MatrixD worldMatrix = MatrixD.CreateTranslation(positionMinCorner + storage.Size / 2);
@@ -757,14 +760,19 @@ namespace Sandbox.Game.Entities
             return MyVoxelConstants.PRIORITY_NORMAL;
         }
 
-        void IMyDecalProxy.AddDecals(MyHitInfo hitInfo, MyStringHash source, object customdata, IMyDecalHandler decalHandler)
+        void IMyDecalProxy.AddDecals(MyHitInfo hitInfo, MyStringHash source, object customdata, IMyDecalHandler decalHandler, MyStringHash material)
         {
             MyDecalRenderInfo renderable = new MyDecalRenderInfo();
             renderable.Flags = MyDecalFlags.World;
             renderable.Position = hitInfo.Position;
             renderable.Normal = hitInfo.Normal;
             renderable.RenderObjectId = Render.GetRenderObjectID();
-            renderable.Material = Physics.GetMaterialAt(hitInfo.Position);
+
+            if (material.GetHashCode() == 0)
+                renderable.Material = Physics.GetMaterialAt(hitInfo.Position);
+            else
+                renderable.Material = material;
+
 
             decalHandler.AddDecal(ref renderable);
         }
@@ -1036,6 +1044,7 @@ namespace Sandbox.Game.Entities
                     {
                         if (entity.PositionComp.WorldAABB.Intersects(box))
                         {
+                            MyHud.Notifications.Add(MyNotificationSingletons.CopyPasteAsteoridObstructed);
                             return false;
                         }
                     }
@@ -1046,8 +1055,9 @@ namespace Sandbox.Game.Entities
 
         public static bool IsForbiddenEntity(MyEntity entity)
         {
+            var cubeGrid = entity as MyCubeGrid;
             return (entity is MyCharacter ||
-                        (entity is MyCubeGrid && (entity as MyCubeGrid).IsStatic == false) ||
+                        (cubeGrid != null && cubeGrid.IsStatic == false && !cubeGrid.IsPreview) ||
                         (entity is MyCockpit && (entity as MyCockpit).Pilot != null));
         }
 
@@ -1080,6 +1090,7 @@ namespace Sandbox.Game.Entities
         [Event, Reliable, Broadcast]
         private void CreateVoxelMeteorCrater_Implementation(Vector3D center, float radius, Vector3 normal, byte material)
         {
+            BeforeContentChanged = true;
             MyVoxelGenerator.MakeCrater(this, new BoundingSphere(center, radius), normal, MyDefinitionManager.Static.GetVoxelMaterialDefinition(material));
         }
 
@@ -1140,6 +1151,32 @@ namespace Sandbox.Game.Entities
             box.Translate(SizeInMetresHalf + StorageMin);
 
             return Storage.Intersect(ref box, lazy);
+        }
+
+        /// <summary>
+        /// Use only for cut request
+        /// </summary>
+        public void SendVoxelCloseRequest()
+        {
+            MyMultiplayer.RaiseStaticEvent(s => OnVoxelClosedRequest, EntityId);
+        }
+
+        [Event, Reliable, Server]
+        static void OnVoxelClosedRequest(long entityId)
+        {
+            if (!MyEventContext.Current.IsLocallyInvoked && !MySession.Static.HasPlayerCreativeRights(MyEventContext.Current.Sender.Value))
+            {
+                MyEventContext.ValidationFailed();
+                return;
+            }
+            MyEntity entity;
+            MyEntities.TryGetEntityById(entityId, out entity);
+            if (entity == null)
+                return;
+
+            // Test right to closing entity (e.g. is creative mode?)
+            if (!entity.MarkedForClose)
+                entity.Close(); // close only on server, server uses replication to propagate it to clients
         }
     }
 }

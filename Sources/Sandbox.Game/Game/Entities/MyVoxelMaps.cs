@@ -77,13 +77,6 @@ namespace Sandbox.Game.Entities
             MyGamePruningStructure.GetAllVoxelMapsInSphere(ref sphere, voxels);
         }
 
-        public List<MyVoxelBase> GetAllOverlappingWithSphere(ref BoundingSphereD sphere)
-        {
-            List<MyVoxelBase> voxels = new List<MyVoxelBase>();
-            MyGamePruningStructure.GetAllVoxelMapsInSphere(ref sphere, voxels);
-            return voxels;
-        }
-
         public void Add(MyVoxelBase voxelMap)
         {
             if (!Exist(voxelMap))
@@ -156,7 +149,7 @@ namespace Sandbox.Game.Entities
             byte[] compressedData;
             foreach (var voxelMap in m_voxelMapsByEntityId.Values)
             {
-                if(includeChanged == false && voxelMap.ContentChanged)
+                if (includeChanged == false && (voxelMap.ContentChanged || voxelMap.BeforeContentChanged))
                 {
                     continue;
                 }

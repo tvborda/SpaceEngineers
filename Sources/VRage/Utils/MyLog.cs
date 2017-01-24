@@ -100,6 +100,7 @@ namespace VRage.Utils
         }
 
 
+        private bool m_alwaysFlush = false;
         public static MyLogSeverity AssertLevel = (MyLogSeverity)(byte.MaxValue);
         private bool LogForMemoryProfiler = false;
         private bool m_enabled = false;             //  Must be false, beuuase MW web site must not write into log file
@@ -134,6 +135,11 @@ namespace VRage.Utils
             {
                 return m_enabled;
             }
+        }
+
+        public MyLog(bool alwaysFlush = false)
+        {
+            m_alwaysFlush = alwaysFlush;
         }
 
         public void Init(string logFileName, StringBuilder appVersionString)
@@ -192,14 +198,17 @@ namespace VRage.Utils
 
             lock (m_lock)
             {
-                int threadId = GetThreadId();
-                m_indentsByThread[threadId] = GetIdentByThread(threadId) + 1;
+                if (m_enabled)
+                {
+                    int threadId = GetThreadId();
+                    m_indentsByThread[threadId] = GetIdentByThread(threadId) + 1;
 
-                MyLogIndentKey indentKey = new MyLogIndentKey(threadId, m_indentsByThread[threadId]);
-                m_indents[indentKey] = new MyLogIndentValue(GetManagedMemory(), GetSystemMemory(), DateTimeOffset.Now);
+                    MyLogIndentKey indentKey = new MyLogIndentKey(threadId, m_indentsByThread[threadId]);
+                    m_indents[indentKey] = new MyLogIndentValue(GetManagedMemory(), GetSystemMemory(), DateTimeOffset.Now);
 
-                if (LogForMemoryProfiler)
-                    MyMemoryLogs.StartEvent();
+                    if (LogForMemoryProfiler)
+                        MyMemoryLogs.StartEvent();
+                }
             }
         }
 
@@ -209,6 +218,8 @@ namespace VRage.Utils
 
             lock (m_lock)
             {
+                if (m_enabled == false) return false;
+
                 int threadId = GetThreadId();
                 MyLogIndentKey indentKey = new MyLogIndentKey(threadId, GetIdentByThread(threadId));
 
@@ -233,6 +244,8 @@ namespace VRage.Utils
 
             lock (m_lock)
             {
+                if (m_enabled == false) return;
+
                 int threadId = GetThreadId();
                 MyLogIndentKey indentKey = new MyLogIndentKey(threadId, GetIdentByThread(threadId));
 
@@ -287,6 +300,8 @@ namespace VRage.Utils
 
             lock (m_lock)
             {
+                if (m_enabled == false) return;
+
                 WriteLine("Log Closed");
 
                 m_streamWriter.Close();
@@ -361,6 +376,8 @@ namespace VRage.Utils
             if (m_enabled == false) return;
 
             WriteLine(m_normalWriter, ex);
+
+            m_streamWriter.Flush();
         }
 
         StringBuilder m_consoleStringBuilder = new StringBuilder();
@@ -383,10 +400,15 @@ namespace VRage.Utils
             {
                 lock (m_lock)
                 {
-                    WriteDateTimeAndThreadId();
-                    WriteString(msg);
-                    m_streamWriter.WriteLine();
-                    m_streamWriter.Flush();
+                    if (m_enabled)
+                    {
+                        WriteDateTimeAndThreadId();
+                        WriteString(msg);
+                        m_streamWriter.WriteLine();
+
+                        if (m_alwaysFlush)
+                            m_streamWriter.Flush();
+                    }
                 }
             }
 
@@ -396,6 +418,13 @@ namespace VRage.Utils
             }
 
             //Debug.WriteLine(msg);
+        }
+
+		//Crash object builder logging
+		//TODO: remove or make sure it uses lock,enabled, etc...
+        public TextWriter GetTextWriter()
+        {
+            return m_streamWriter;
         }
 
         private string GetGCMemoryString(string prependText = "")
@@ -469,6 +498,17 @@ namespace VRage.Utils
 
         void WriteString(String text)
         {
+            if (text == null ||
+    m_tmpWrite == null ||
+    m_streamWriter == null)
+                return;
+
+
+            if (text == null)
+            {
+                Debug.Fail("text shouldn't be null!");
+                text = "UNKNOWN ERROR: text shouldn't be null!";
+            }
             if (m_tmpWrite.Length < text.Length)
             {
                 Array.Resize(ref m_tmpWrite, Math.Max(m_tmpWrite.Length * 2, text.Length));
@@ -479,6 +519,12 @@ namespace VRage.Utils
 
         void WriteStringBuilder(StringBuilder sb)
         {
+            //JC: fix for a NullReferenceException, when the game is closed
+            if (sb == null || 
+                m_tmpWrite == null ||
+                m_streamWriter == null)
+                return;
+
             if (m_tmpWrite.Length < sb.Length)
             {
                 Array.Resize(ref m_tmpWrite, Math.Max(m_tmpWrite.Length * 2, sb.Length));
@@ -514,19 +560,22 @@ namespace VRage.Utils
             {
                 lock (m_lock)
                 {
-                    WriteDateTimeAndThreadId();
+                    if (m_enabled)
+                    {
+                        WriteDateTimeAndThreadId();
 
-                    StringBuilder sb = m_stringBuilder;
-                    sb.Clear();
+                        StringBuilder sb = m_stringBuilder;
+                        sb.Clear();
 
-                    sb.AppendFormat("{0}: ", severity);
-                    sb.AppendFormat(format, args);
-                    sb.Append('\n');
+                        sb.AppendFormat("{0}: ", severity);
+                        sb.AppendFormat(format, args);
+                        sb.Append('\n');
 
-                    WriteStringBuilder(sb);
+                        WriteStringBuilder(sb);
 
-                    if ((int)severity >= (int)AssertLevel)
-                        SystemTrace.Fail(sb.ToString());
+                        if ((int)severity >= (int)AssertLevel)
+                            SystemTrace.Fail(sb.ToString());
+                    }
                 }
             }
         }
@@ -537,21 +586,29 @@ namespace VRage.Utils
             {
                 lock (m_lock)
                 {
-                    WriteDateTimeAndThreadId();
+                    if (m_enabled)
+                    {
+                        WriteDateTimeAndThreadId();
 
-                    StringBuilder sb = m_stringBuilder;
-                    sb.Clear();
+                        StringBuilder sb = m_stringBuilder;
+                        sb.Clear();
 
-                    sb.AppendFormat("{0}: ", severity);
-                    sb.AppendStringBuilder(builder);
-                    sb.Append('\n');
+                        sb.AppendFormat("{0}: ", severity);
+                        sb.AppendStringBuilder(builder);
+                        sb.Append('\n');
 
-                    WriteStringBuilder(sb);
+                        WriteStringBuilder(sb);
 
-                    if ((int)severity >= (int)AssertLevel)
-                        SystemTrace.Fail(sb.ToString());
+                        if ((int)severity >= (int)AssertLevel)
+                            SystemTrace.Fail(sb.ToString());
+                    }
                 }
             }
+        }
+
+        public void Flush()
+        {
+            m_streamWriter.Flush();
         }
     }
 

@@ -223,6 +223,8 @@ namespace Sandbox
                             Sandbox.Game.MyPerGameSettings.RequiresDX11,
                             args.ExceptionObject as Exception);
                     }
+
+                    MySandboxGame.Log.Flush();
 #if !XB1
                     Process.GetCurrentProcess().Kill();
 #else // XB1
@@ -313,7 +315,7 @@ namespace Sandbox
         {
             try
             {
-                MyRenderException renderException = e as MyRenderException;
+                /*MyRenderException renderException = e as MyRenderException;
 
                 if (renderException != null)
                 {
@@ -323,7 +325,7 @@ namespace Sandbox
                 //{
                 //    MyErrorReporter.ReportNotDX11GPUCrash(gameName, logPath, minimumRequirementsPage);
                 //}
-                else if (/*IsUnsupportedGpu(e) || */MyVideoSettingsManager.GpuUnderMinimum) // Uncomment this too
+                else*/ if (/*IsUnsupportedGpu(e) || */MyVideoSettingsManager.GpuUnderMinimum) // Uncomment this too
                 {
                     MyErrorReporter.ReportGpuUnderMinimumCrash(gameName, logPath, minimumRequirementsPage);
                 }

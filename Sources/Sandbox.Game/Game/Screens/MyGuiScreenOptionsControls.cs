@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using VRage;
+using VRage.Audio;
 using VRage.Game;
 using VRage.Input;
 using VRage.Library.Utils;
@@ -77,7 +78,7 @@ namespace Sandbox.Game.Gui
 
             #region Add Revert, OK, Cancel and selection combobox
             var buttonSize = MyGuiControlButton.GetVisualStyle(MyGuiControlButtonStyleEnum.Default).NormalTexture.MinSizeGui;
-            float buttonsY = bottomCenter.Y - 110f / MyGuiConstants.GUI_OPTIMAL_SIZE.Y;
+            float buttonsY = bottomCenter.Y - 0.055f;
             var okButton = new MyGuiControlButton(
                 position: new Vector2(-buttonSize.X - 20f / MyGuiConstants.GUI_OPTIMAL_SIZE.X, buttonsY),
                 size: MyGuiConstants.MESSAGE_BOX_BUTTON_SIZE_SMALL,

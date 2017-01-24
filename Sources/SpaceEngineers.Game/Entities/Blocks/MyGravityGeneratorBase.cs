@@ -107,7 +107,7 @@ namespace SpaceEngineers.Game.Entities.Blocks
         }
         protected override bool CheckIsWorking()
         {
-			return (ResourceSink != null ? ResourceSink.IsPowered : true) && base.CheckIsWorking();
+            return (ResourceSink != null ? ResourceSink.IsPoweredByType(MyResourceDistributorComponent.ElectricityId) : true) && base.CheckIsWorking();
         }
 
         public MyGravityGeneratorBase()
@@ -178,7 +178,21 @@ namespace SpaceEngineers.Game.Entities.Blocks
                         character == null) 
                     {
                         if (entity.Physics.RigidBody != null && entity.Physics.RigidBody.IsActive)
-                            entity.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, gravity * entity.Physics.RigidBody.Mass, null, null);
+                        {
+                            //<ib.change> increase gravity for floating objects
+                            //entity.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, gravity * entity.Physics.RigidBody.Mass, null, null);
+                            if (entity is MyFloatingObject)
+                            {
+                                var floatingEntity = entity as MyFloatingObject;
+                                float w = (floatingEntity.HasConstraints()) ? 2.0f : 1.0f;
+                                entity.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, w * gravity * entity.Physics.RigidBody.Mass, null, null);                                
+                            }
+                            else
+                            {
+                                entity.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, gravity * entity.Physics.RigidBody.Mass, null, null);
+                            }                   
+                            
+                        }
                     }
                 }
             }

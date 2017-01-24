@@ -38,7 +38,6 @@ namespace Sandbox.Game.World
         private const int EVENT_SPAWN_TRY_MAX = 3;
 
         private static List<MyPhysics.HitInfo> m_raycastHits = new List<MyPhysics.HitInfo>();
-        private static List<MyCubeGrid> m_tmpGridList = new List<MyCubeGrid>();
 
         private static List<float> m_spawnGroupCumulativeFrequencies = new List<float>();
         private static float m_spawnGroupTotalFrequencies = 0.0f;
@@ -281,21 +280,10 @@ namespace Sandbox.Game.World
             origin = MyEntities.TestPlaceInSpace(origin.Value, spawnGroup.SpawnRadius);
             if (!origin.HasValue)
             {
-                if (++m_eventSpawnTry <= EVENT_SPAWN_TRY_MAX)
-                {
-                    MySandboxGame.Log.WriteLine("Could not spawn neutral ships - no free place found. Try " + m_eventSpawnTry + " of " + EVENT_SPAWN_TRY_MAX);
-
-                    MyGlobalEvents.RescheduleEvent(senderEvent as MyGlobalEventBase, NEUTRAL_SHIP_RESCHEDULE_TIME);
-                    ProfilerShort.End();
-                    return;
-                }
-                else
-                {
-                    m_eventSpawnTry = 0;
-                    return;
-                }
+                RetryEventWithMaxTry(senderEvent as MyGlobalEventBase);
+                ProfilerShort.End();
+                return;
             }
-            m_eventSpawnTry = 0;
 
             // Radius in arc units of the forbidden sphere in the center, when viewed from origin
             float centerArcRadius = (float)Math.Atan(forbiddenRadius / (origin.Value - spawnBox.Center).Length());
@@ -349,7 +337,7 @@ namespace Sandbox.Game.World
                 {
                     if (!MyFinalBuildConstants.IS_OFFICIAL)
                         MySandboxGame.Log.WriteLine("Could not spawn neutral ships: spawn point is inside gravity well");
-                    MyGlobalEvents.RescheduleEvent(senderEvent as MyGlobalEventBase, NEUTRAL_SHIP_RESCHEDULE_TIME);
+                    RetryEventWithMaxTry(senderEvent as MyGlobalEventBase);
                     ProfilerShort.End();
                     return;
                 }
@@ -357,7 +345,7 @@ namespace Sandbox.Game.World
                 {
                     if (!MyFinalBuildConstants.IS_OFFICIAL)
                         MySandboxGame.Log.WriteLine("Could not spawn neutral ships: destination point is inside gravity well");
-                    MyGlobalEvents.RescheduleEvent(senderEvent as MyGlobalEventBase, NEUTRAL_SHIP_RESCHEDULE_TIME);
+                    RetryEventWithMaxTry(senderEvent as MyGlobalEventBase);
                     ProfilerShort.End();
                     return;
                 }
@@ -365,7 +353,7 @@ namespace Sandbox.Game.World
                 {
                     if (!MyFinalBuildConstants.IS_OFFICIAL)
                         MySandboxGame.Log.WriteLine("Could not spawn neutral ships: flight path intersects gravity well");
-                    MyGlobalEvents.RescheduleEvent(senderEvent as MyGlobalEventBase, NEUTRAL_SHIP_RESCHEDULE_TIME);
+                    RetryEventWithMaxTry(senderEvent as MyGlobalEventBase);
                     ProfilerShort.End();
                     return;
                 }
@@ -375,7 +363,7 @@ namespace Sandbox.Game.World
                 {
                     if (!MyFinalBuildConstants.IS_OFFICIAL)
                         MySandboxGame.Log.WriteLine("Could not spawn neutral ships due to collision");
-                    MyGlobalEvents.RescheduleEvent(senderEvent as MyGlobalEventBase, NEUTRAL_SHIP_RESCHEDULE_TIME);
+                    RetryEventWithMaxTry(senderEvent as MyGlobalEventBase);
                     ProfilerShort.End();
                     return;
                 }
@@ -389,7 +377,7 @@ namespace Sandbox.Game.World
                     {
                         if (!MyFinalBuildConstants.IS_OFFICIAL)
                             MySandboxGame.Log.WriteLine("Could not spawn neutral ships due to collision");
-                        MyGlobalEvents.RescheduleEvent(senderEvent as MyGlobalEventBase, NEUTRAL_SHIP_RESCHEDULE_TIME);
+                        RetryEventWithMaxTry(senderEvent as MyGlobalEventBase);
                         ProfilerShort.End();
                         return;
                     }
@@ -412,7 +400,7 @@ namespace Sandbox.Game.World
                 Vector3D shipDestination = shipPosition + directionMult;
                 Vector3D up = Vector3D.CalculatePerpendicularVector(-direction);
 
-                m_tmpGridList.Clear();
+                List<MyCubeGrid> tmpGridList = new List<MyCubeGrid>();
 
                 // CH: We don't want a new identity for each ship anymore. We should handle that in a better way...
                 /*if (shipPrefab.ResetOwnership)
@@ -427,8 +415,18 @@ namespace Sandbox.Game.World
 
                 // Deploy ship
                 ProfilerShort.Begin("Spawn cargo ship");
+                Stack<Action> callbacks = new Stack<Action>();
+                callbacks.Push(delegate()
+                {
+                    InitAutopilot(tmpGridList, shipDestination, direction);
+                    foreach (var grid in tmpGridList)
+                    {
+                        Debug.Assert(grid.Physics.Enabled);
+                        grid.ActivatePhysics(); //last chance to activate physics
+                    }
+                });
                 MyPrefabManager.Static.SpawnPrefab(
-                    resultList: m_tmpGridList,
+                    resultList: tmpGridList,
                     prefabName: shipPrefab.SubtypeId,
                     position: shipPosition,
                     forward: direction,
@@ -439,10 +437,17 @@ namespace Sandbox.Game.World
                                      VRage.Game.ModAPI.SpawningOptions.SpawnRandomCargo |
                                      VRage.Game.ModAPI.SpawningOptions.DisableDampeners,
                                      ownerId: shipPrefab.ResetOwnership ? spawnGroupId : 0,
-                    updateSync: true);
+                    callbacks: callbacks);
                 ProfilerShort.End();
+                ProfilerShort.End();
+            }
+            m_eventSpawnTry = 0;
+            ProfilerShort.End();
+        }
 
-                foreach (var grid in m_tmpGridList)
+        private static void InitAutopilot(List<MyCubeGrid> tmpGridList, Vector3D shipDestination, Vector3D direction)
+        {
+                foreach (var grid in tmpGridList)
                 {
                     var cockpit = grid.GetFirstBlockOfType<MyCockpit>();
                     if (cockpit != null)
@@ -452,13 +457,23 @@ namespace Sandbox.Game.World
                         break;
                     }
                 }
-
-                m_tmpGridList.Clear();
-
-                ProfilerShort.End();
             }
 
-            ProfilerShort.End();
+        private static void RetryEventWithMaxTry(MyGlobalEventBase evt)
+        {
+            if (++m_eventSpawnTry <= EVENT_SPAWN_TRY_MAX)
+            {
+                MySandboxGame.Log.WriteLine("Could not spawn event. Try " + m_eventSpawnTry + " of " + EVENT_SPAWN_TRY_MAX);
+
+                MyGlobalEvents.RescheduleEvent(evt, NEUTRAL_SHIP_RESCHEDULE_TIME);
+                return;
+            }
+            else
+            {
+                m_eventSpawnTry = 0;
+                return;
+            }
+        }
+
         }
     }
-}

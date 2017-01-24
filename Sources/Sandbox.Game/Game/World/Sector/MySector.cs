@@ -1,12 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using VRageMath;
-using Sandbox.Common.ObjectBuilders;
 using VRage.Utils;
-using Sandbox.Engine.Utils;
 using Sandbox.Game.Entities;
-using Sandbox.Game.Entities.Character;
-using Sandbox.Common;
 using Sandbox.Definitions;
 using System.Diagnostics;
 using VRage.Game;
@@ -17,10 +12,73 @@ using VRageRender;
 using System.IO;
 using VRage.FileSystem;
 using VRageRender.Messages;
-using Sandbox.Game.SessionComponents;
+using Sandbox.Engine.Utils;
 
 namespace Sandbox.Game.World
 {
+    public class MySectorLodding
+    {
+        public MyNewLoddingSettings UserSettings = new MyNewLoddingSettings();
+        MyNewLoddingSettings m_lowSettings = new MyNewLoddingSettings();
+        MyNewLoddingSettings m_mediumSettings = new MyNewLoddingSettings();
+        MyNewLoddingSettings m_highSettings = new MyNewLoddingSettings();
+
+        bool m_isActiveUserSettings = false;
+        MyRenderQualityEnum m_selectedModelQuality = MyRenderQualityEnum.HIGH;
+        public MyNewLoddingSettings LowSettings { get { return m_lowSettings; } }
+        public MyNewLoddingSettings MediumSettings { get { return m_mediumSettings; } }
+        public MyNewLoddingSettings HighSettings { get { return m_highSettings; } }
+
+        void Apply()
+        {
+            if (m_isActiveUserSettings)
+                MyRenderProxy.UpdateNewLoddingSettings(UserSettings);
+            else
+            {
+                MyNewLoddingSettings sel;
+                switch (m_selectedModelQuality)
+                {
+                    case MyRenderQualityEnum.LOW:
+                        sel = LowSettings;
+                        break;
+                    case MyRenderQualityEnum.NORMAL:
+                        sel = MediumSettings;
+                        break;
+                    case MyRenderQualityEnum.HIGH:
+                        sel = HighSettings;
+                        break;
+                    default:
+                        Debug.Fail("Unresolved condition");
+                        return;
+                }
+                MyRenderProxy.UpdateNewLoddingSettings(sel);
+            }
+        }
+
+        public void ApplyUserSettings()
+        {
+            m_isActiveUserSettings = true;
+            Apply();
+        }
+
+        public void UpdatePreset(MyNewLoddingSettings userSettings, MyNewLoddingSettings lowLoddingSettings, MyNewLoddingSettings mediumLoddingSettings,
+            MyNewLoddingSettings highLoddingSettings)
+        {
+            UserSettings.CopyFrom(userSettings);
+            m_lowSettings.CopyFrom(lowLoddingSettings);
+            m_mediumSettings.CopyFrom(mediumLoddingSettings);
+            m_highSettings.CopyFrom(highLoddingSettings);
+            if (!m_isActiveUserSettings)
+                Apply();
+        }
+
+        public void SelectQuality(MyRenderQualityEnum quality)
+        {
+            m_isActiveUserSettings = false;
+            m_selectedModelQuality = quality;
+            Apply();
+        }
+    }
 
     [MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation | MyUpdateOrder.AfterSimulation, 800)]
     public class MySector : MySessionComponentBase
@@ -37,7 +95,9 @@ namespace Sandbox.Game.World
         public static MySSAOSettings SSAOSettings;
         public static MyHBAOData HBAOSettings;
         public static MyShadowsSettings ShadowSettings = new MyShadowsSettings();
-
+        public static MyNewPipelineSettings NewPipelineSettings = new MyNewPipelineSettings();
+        public static MySectorLodding Lodding = new MySectorLodding();
+        
         internal static MyParticleDustProperties ParticleDustProperties;
         public static VRageRender.MyImpostorProperties[] ImpostorProperties;
         public static bool UseGenerator = false;
@@ -46,7 +106,19 @@ namespace Sandbox.Game.World
 
         public static MyEnvironmentDefinition EnvironmentDefinition;
 
-        public static MyCamera MainCamera;
+        private static Lights.MyLight m_sunFlare; 
+
+        private static MyCamera m_camera;
+        public static MyCamera MainCamera
+        {
+            get { return m_camera;  }
+            set
+            {
+                m_camera = value;
+                Graphics.MyGuiManager.SetCamera(MainCamera);
+                MyTransparentGeometry.SetCamera(MainCamera);
+            }
+        }
 
         public static void SetDefaults()
         {
@@ -82,14 +154,20 @@ namespace Sandbox.Game.World
             SSAOSettings = environment.SSAOSettings;
             HBAOSettings = environment.HBAOSettings;
             ShadowSettings.CopyFrom(environment.ShadowSettings);
+            NewPipelineSettings.CopyFrom(environment.NewPipelineSettings);
             SunRotationAxis = SunProperties.SunRotationAxis;
 
             MyRenderProxy.UpdateShadowsSettings(ShadowSettings);
+            MyRenderProxy.UpdateNewPipelineSettings(NewPipelineSettings);
+            MySector.Lodding.UpdatePreset(environment.UserLoddingSettings, environment.LowLoddingSettings, environment.MediumLoddingSettings, environment.HighLoddingSettings);
+
+            MyMaterialsSettings materialsSettings = new MyMaterialsSettings();
+            materialsSettings.CopyFrom(environment.MaterialsSettings);
+            MyRenderProxy.UpdateMaterialsSettings(materialsSettings);
 
             // TODO: Delete MyPostprocessSettingsWrapper and move to have bundled
             // settings in MySector and change all references to point here
             MyPostprocessSettingsWrapper.Settings = environment.PostProcessSettings;
-            MyPostprocessSettingsWrapper.PlanetSettings = environment.PostProcessSettings;
 
             if (environmentBuilder != null)
             {
@@ -115,6 +193,11 @@ namespace Sandbox.Game.World
             EnvironmentDefinition.HBAOSettings = HBAOSettings;
             EnvironmentDefinition.PostProcessSettings = MyPostprocessSettingsWrapper.Settings;
             EnvironmentDefinition.ShadowSettings.CopyFrom(ShadowSettings);
+            EnvironmentDefinition.NewPipelineSettings.CopyFrom(NewPipelineSettings);
+            EnvironmentDefinition.UserLoddingSettings.CopyFrom(Lodding.UserSettings);
+            EnvironmentDefinition.LowLoddingSettings.CopyFrom(Lodding.LowSettings);
+            EnvironmentDefinition.MediumLoddingSettings.CopyFrom(Lodding.MediumSettings);
+            EnvironmentDefinition.HighLoddingSettings.CopyFrom(Lodding.HighSettings);
 
             var save = new MyObjectBuilder_Definitions();
             save.Environments = new MyObjectBuilder_EnvironmentDefinition[] { (MyObjectBuilder_EnvironmentDefinition)EnvironmentDefinition.GetObjectBuilder() };
@@ -147,9 +230,32 @@ namespace Sandbox.Game.World
 
         public override void LoadData()
         {
-            MainCamera = new MyCamera(MySandboxGame.Config.FieldOfView, MySandboxGame.ScreenViewport);
-            MainCamera.FarPlaneDistance = MySession.Static.Settings.ViewDistance;
+            MainCamera = new MyCamera(MySandboxGame.Config.FieldOfView, MySandboxGame.ScreenViewport)
+            {
+                FarPlaneDistance = MySession.Static.Settings.ViewDistance
+            };
             MyEntities.LoadData();
+
+            Debug.Assert(m_sunFlare == null);
+            m_sunFlare = Lights.MyLights.AddLight();
+            m_sunFlare.Start(Lights.MyLight.LightTypeEnum.None, 1.0f);
+            m_sunFlare.LightOwner = Lights.MyLight.LightOwnerEnum.LargeShip;
+            m_sunFlare.GlareOn = MyFakes.SUN_GLARE;
+            m_sunFlare.GlareIntensity = 1;
+            m_sunFlare.GlareSize = 25000.0f;
+            m_sunFlare.GlareQuerySize = 100000.0f;
+            m_sunFlare.GlareQueryFreqMinMs = 0;
+            m_sunFlare.GlareQueryFreqRndMs = 0;
+            m_sunFlare.GlareType = VRageRender.Lights.MyGlareTypeEnum.Distant;
+            m_sunFlare.GlareMaterial = "SunGlareMain";
+            m_sunFlare.GlareMaxDistance = 2000000;
+            UpdateSunLight();
+        }
+
+        public static void UpdateSunLight()
+        {
+            m_sunFlare.Position = MainCamera.Position + SunProperties.SunDirectionNormalized * 1000000;
+            m_sunFlare.UpdateLight();
         }
 
         protected override void UnloadData()
@@ -157,6 +263,10 @@ namespace Sandbox.Game.World
             MyEntities.UnloadData();
             MainCamera = null;
             base.UnloadData();
+
+            if (m_sunFlare != null)
+                Lights.MyLights.RemoveLight(m_sunFlare);
+            m_sunFlare = null;
         }
 
         public override void UpdateBeforeSimulation()

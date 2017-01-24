@@ -34,10 +34,11 @@
         UpdateColorEmissivity,
         ChangeModel,
         ChangeModelMaterial,
-        TextNotDrawnToTexture,//Output
         RenderTextureFreed,//Output
+        CreateGeneratedTexture,
+        ResetGeneratedTexture,
         ChangeMaterialTexture,
-        DrawTextToMaterial,
+        RenderOffscreenTextureToMaterial,
 
         UpdateGameplayFrame,
 
@@ -48,11 +49,6 @@
         InvalidateClipmapRange,
         ClipmapsReady, // Output
 
-        UpdateMergedVoxelMesh,
-        MergeVoxelMeshes,   // Output
-        CancelVoxelMeshMerge,   // Output
-        ResetMergedVoxels,
-
         CreateRenderVoxelMaterials,
         UpdateRenderVoxelMaterials,
         CreateRenderVoxelDebris,
@@ -61,6 +57,7 @@
 
         CreateGPUEmitter,
         UpdateGPUEmitters,
+        UpdateGPUEmittersLight,
         UpdateGPUEmittersTransform,
         RemoveGPUEmitter,
 
@@ -69,11 +66,13 @@
         SetLightShadowIgnore,
         ClearLightShadowIgnore,
         UpdateShadowSettings,
+        UpdateNewLoddingSettings,
+        UpdateNewPipelineSettings,
+        UpdateMaterialsSettings,
 
         ReloadEffects,
         ReloadModels,
         ReloadTextures,
-        ReloadGrass,
 
         UpdatePostprocessSettings,
         UpdateRenderEnvironment,
@@ -97,8 +96,6 @@
         SetDecalGlobals,
         RegisterDecalsMaterials,
         ClearDecals,
-
-        UpdateCockpitGlass,
 
         TakeScreenshot,
         ScreenshotTaken, //Output

@@ -360,6 +360,7 @@ namespace Sandbox.Game.World
             voxelMap.Init(storageName, storage, positionMinCorner);
             MyEntities.RaiseEntityCreated(voxelMap);
             MyEntities.Add(voxelMap);
+            voxelMap.IsReadyForReplication = true;
             return voxelMap;
         }
 
@@ -376,6 +377,7 @@ namespace Sandbox.Game.World
             voxelMap.Init(storageName, storage, worldMatrix);
             MyEntities.Add(voxelMap);
             MyEntities.RaiseEntityCreated(voxelMap);
+            voxelMap.IsReadyForReplication = true;
 
             ProfilerShort.End();
             return voxelMap;
@@ -476,6 +478,9 @@ namespace Sandbox.Game.World
             sessionSettings.ProceduralSeed = MyRandom.Instance.Next();
             switch ((MyGuiScreenWorldGeneratorSettings.AsteroidAmountEnum)asteroidAmount)
             {
+                case MyGuiScreenWorldGeneratorSettings.AsteroidAmountEnum.ProceduralNone:
+                    sessionSettings.ProceduralDensity = 0.00f;
+                    break;
                 case MyGuiScreenWorldGeneratorSettings.AsteroidAmountEnum.ProceduralLow:
                     sessionSettings.ProceduralDensity = 0.25f;
                     break;

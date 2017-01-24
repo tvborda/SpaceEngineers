@@ -14,11 +14,11 @@
         System.Collections.Generic.List<ulong> Mods { get;}
         bool PauseGameWhenEmpty { get; set; }
         void Save(string path = null);
-        MyDefinitionId Scenario { get; set; }
         string ServerName { get; set; }
         int ServerPort { get; set; }
         MyObjectBuilder_SessionSettings SessionSettings { get; set; }
         int SteamPort { get; set; }
         string WorldName { get; set; }
+        string PremadeCheckpointPath { get; set; }
     }
 }

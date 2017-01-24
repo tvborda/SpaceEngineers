@@ -47,6 +47,9 @@ namespace VRageRender
 
         // only on USE_MERGE_INSTANCING
         USE_SINGLE_INSTANCE = 1 << 16,
+
+        // no restriction
+        USE_TEXTURE_INDICES = 1 << 17,
     }
 
     struct MyMaterialShadersBundleId
@@ -104,11 +107,20 @@ namespace VRageRender
         public const string FORWARD_PASS = "Forward";
         public const string HIGHLIGHT_PASS = "Highlight";
         public const string FOLIAGE_STREAMING_PASS = "FoliageStreaming";
+        public const string STATIC_GLASS_PASS = "StaticGlass";
 
-        public const string DEFAULT_MATERIAL_TAG = "Standard";
-        public const string ALPHA_MASKED_MATERIAL_TAG = "AlphaMasked";
-        public const string SINGLE_MATERIAL_TAG = "TriplanarSingle";
-        public const string MULTI_MATERIAL_TAG = "TriplanarMulti";
+        public static MyStringId GBUFFER_PASS_ID = X.TEXT_(GBUFFER_PASS);
+        public static MyStringId DEPTH_PASS_ID = X.TEXT_(DEPTH_PASS);
+        public static MyStringId FORWARD_PASS_ID = X.TEXT_(FORWARD_PASS);
+        public static MyStringId HIGHLIGHT_PASS_ID = X.TEXT_(HIGHLIGHT_PASS);
+        public static MyStringId FOLIAGE_STREAMING_PASS_ID = X.TEXT_(FOLIAGE_STREAMING_PASS);
+        public static MyStringId STATIC_GLASS_PASS_ID = X.TEXT_(STATIC_GLASS_PASS);
+
+        public static MyStringId DEFAULT_MATERIAL_TAG = X.TEXT_("Standard");
+        public static MyStringId ALPHA_MASKED_MATERIAL_TAG = X.TEXT_("AlphaMasked");
+        public static MyStringId TRIPLANAR_SINGLE_MATERIAL_TAG = X.TEXT_("TriplanarSingle");
+        public static MyStringId TRIPLANAR_MULTI_MATERIAL_TAG = X.TEXT_("TriplanarMulti");
+        public static MyStringId TRIPLANAR_DEBRIS_MATERIAL_TAG = X.TEXT_("TriplanarDebris");
 
         internal static void AddMaterialShaderFlagMacrosTo(List<ShaderMacro> list, MyShaderUnifiedFlags flags, MyFileTextureEnum textureTypes = MyFileTextureEnum.UNSPECIFIED)
         {
@@ -147,10 +159,12 @@ namespace VRageRender
                 Debug.Assert((flags & MyShaderUnifiedFlags.USE_MERGE_INSTANCING) > 0);
                 list.Add(new ShaderMacro("USE_SINGLE_INSTANCE", null));
             }
-            if ((flags & MyShaderUnifiedFlags.USE_VOXEL_MORPHING) == MyShaderUnifiedFlags.USE_VOXEL_MORPHING)
+            if ((flags & MyShaderUnifiedFlags.USE_VOXEL_MORPHING) > 0)
                 list.Add(new ShaderMacro("USE_VOXEL_MORPHING", null));
-            if ((flags & MyShaderUnifiedFlags.USE_VOXEL_DATA) == MyShaderUnifiedFlags.USE_VOXEL_DATA)
+            if ((flags & MyShaderUnifiedFlags.USE_VOXEL_DATA) > 0)
                 list.Add(new ShaderMacro("USE_VOXEL_DATA", null));
+            if ((flags & MyShaderUnifiedFlags.USE_TEXTURE_INDICES) > 0)
+                list.Add(new ShaderMacro("USE_TEXTURE_INDICES", null));
         }
 
         static Dictionary<MyStringId, MyMaterialShaderInfo> MaterialSources = new Dictionary<MyStringId, MyMaterialShaderInfo>(MyStringId.Comparer);
@@ -290,6 +304,15 @@ namespace VRageRender
             {
                 string message = "Failed to compile material shader" + info.Name + " for vertex " + info.Layout.Info.Components.GetString();
                 MyRender11.Log.WriteLine(message);
+                
+                if (vsBytecode == null && psBytecode != null)
+                    message = "vsByteCode is null, descriptor: " + vsDescriptor;
+                else if (vsBytecode != null && psBytecode == null)
+                    message = "psByteCode is null, descriptor: " + psDescriptor;
+                else
+                    message = "vsByteCode and psByteCode are null, vsDescriptor: " + vsDescriptor + "; psDescriptor: " + psDescriptor;
+                MyRender11.Log.WriteLine(message);
+
 #if DEBUG
                 if (Debugger.IsAttached)
                 {
@@ -334,19 +357,34 @@ namespace VRageRender
                     return new ShaderMacro(RENDERING_PASS, 3);
                 case FOLIAGE_STREAMING_PASS:
                     return new ShaderMacro(RENDERING_PASS, 4);
+                case STATIC_GLASS_PASS:
+                    return new ShaderMacro(RENDERING_PASS, 5);
                 default:
                     throw new Exception();
             }
         }
 
-        internal static string MapTechniqueToShaderMaterial(MyMeshDrawTechnique technique)
+        internal static MyStringId MapTechniqueToDefaultPass(MyMeshDrawTechnique technique)
+        {
+            switch (technique)
+            {
+                case MyMeshDrawTechnique.GLASS:
+                    return STATIC_GLASS_PASS_ID;
+                default:
+                    return GBUFFER_PASS_ID;
+            }
+        }
+
+        internal static MyStringId MapTechniqueToShaderMaterial(MyMeshDrawTechnique technique)
         {
             switch (technique)
             {
                 case MyMeshDrawTechnique.VOXEL_MAP_SINGLE:
-                    return SINGLE_MATERIAL_TAG;
+                    return TRIPLANAR_SINGLE_MATERIAL_TAG;
                 case MyMeshDrawTechnique.VOXEL_MAP_MULTI:
-                    return MULTI_MATERIAL_TAG;
+                    return TRIPLANAR_MULTI_MATERIAL_TAG;
+                case MyMeshDrawTechnique.VOXELS_DEBRIS:
+                    return TRIPLANAR_DEBRIS_MATERIAL_TAG;
                 case MyMeshDrawTechnique.ALPHA_MASKED:
                 case MyMeshDrawTechnique.FOLIAGE:
                     return ALPHA_MASKED_MATERIAL_TAG;

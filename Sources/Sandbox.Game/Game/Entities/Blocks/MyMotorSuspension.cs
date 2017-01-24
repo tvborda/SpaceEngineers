@@ -309,10 +309,16 @@ namespace Sandbox.Game.Entities.Cube
             m_suspensionTravel.ValueChanged += (x) => HeigthChanged();
         }
 
-        static void CreateTerminalControls()
+        protected override void CreateTerminalControls()
         {
             if (MyTerminalControlFactory.AreControlsCreated<MyMotorSuspension>())
                 return;
+            base.CreateTerminalControls();
+
+            var addWheelHead = new MyTerminalControlButton<MyMotorSuspension>("Add Top Part", MySpaceTexts.BlockActionTitle_AddWheel, MySpaceTexts.BlockActionTooltip_AddWheel, (b) => b.RecreateTop());
+            addWheelHead.Enabled = (b) => (b.TopBlock == null);
+            addWheelHead.EnableAction(MyTerminalActionIcons.STATION_ON);
+            MyTerminalControlFactory.AddControl(addWheelHead);
 
             var steering = new MyTerminalControlCheckbox<MyMotorSuspension>("Steering", MySpaceTexts.BlockPropertyTitle_Motor_Steering, MySpaceTexts.BlockPropertyDescription_Motor_Steering);
             steering.Getter = (x) => x.Steering;
@@ -488,6 +494,8 @@ namespace Sandbox.Game.Entities.Cube
                     (BlockDefinition.MinHeight - m_height) * SuspensionTravel);
                 (m_constraint.ConstraintData as HkWheelConstraintData).SetSuspensionMaxLimit(
                     (BlockDefinition.MaxHeight - m_height) * SuspensionTravel);
+                if (CubeGrid.Physics != null)
+                    CubeGrid.Physics.ForceActivate();
             }
         }
 
@@ -660,48 +668,49 @@ namespace Sandbox.Game.Entities.Cube
             if (!base.CreateConstraint(rotor))
                 return false;
             var rotorBody = TopGrid.Physics.RigidBody;
-                    rotorBody.MaxAngularVelocity = float.MaxValue;
-                    rotorBody.Restitution = 0.5f;
-                    CubeGrid.GetPhysicsBody().HavokWorld.BreakOffPartsUtil.UnmarkEntityBreakable(rotorBody);
-                    if (MyFakes.WHEEL_SOFTNESS)
-                    {
+            rotorBody.MaxAngularVelocity = float.MaxValue;
+            rotorBody.Restitution = 0.5f;
+            CubeGrid.GetPhysicsBody().HavokWorld.BreakOffPartsUtil.UnmarkEntityBreakable(rotorBody);
+            if (MyFakes.WHEEL_SOFTNESS)
+            {
                 HkUtils.SetSoftContact(rotorBody, null, MyPhysicsConfig.WheelSoftnessRatio,
                     MyPhysicsConfig.WheelSoftnessVelocity);
-                    }
+            }
             var info = HkGroupFilter.CalcFilterInfo(rotorBody.Layer,
                 CubeGrid.GetPhysicsBody().HavokCollisionSystemID, 1, 1);
-                    rotorBody.SetCollisionFilterInfo(info);
-                    HkWheelConstraintData data = new HkWheelConstraintData();
-                    var suspensionAx = PositionComp.LocalMatrix.Forward;
+            rotorBody.SetCollisionFilterInfo(info);
+            CubeGrid.GetPhysicsBody().HavokWorld.RefreshCollisionFilterOnEntity(rotorBody);
+            HkWheelConstraintData data = new HkWheelConstraintData();
+            var suspensionAx = PositionComp.LocalMatrix.Forward;
             var posA = DummyPosition + (suspensionAx*m_height);
-                    var posB = (rotor as MyMotorRotor).DummyPosLoc;
-                    var axisA = PositionComp.LocalMatrix.Up;
-                    var axisAPerp = PositionComp.LocalMatrix.Forward;
-                    var axisB = rotor.PositionComp.LocalMatrix.Up;
+            var posB = (rotor as MyMotorRotor).DummyPosLoc;
+            var axisA = PositionComp.LocalMatrix.Up;
+            var axisAPerp = PositionComp.LocalMatrix.Forward;
+            var axisB = rotor.PositionComp.LocalMatrix.Up;
             data.SetInBodySpace(posB, posA, axisB, axisA, suspensionAx, suspensionAx, RotorGrid.Physics,
                 CubeGrid.Physics);
-                    //empirical values because who knows what havoc sees behind this 
-                    //docs say one value should mean same effect for 2 ton or 200 ton vehicle 
-                    //but we have virtual mass blocks so real mass doesnt corespond to actual "weight" in game and varying gravity
-                    data.SetSuspensionDamping(m_damping);
-                    data.SetSuspensionStrength(m_strenth);
-                    //Min/MaxHeight also define the limits of the suspension and SuspensionTravel lowers this limit
+            //empirical values because who knows what havoc sees behind this 
+            //docs say one value should mean same effect for 2 ton or 200 ton vehicle 
+            //but we have virtual mass blocks so real mass doesnt corespond to actual "weight" in game and varying gravity
+            data.SetSuspensionDamping(m_damping);
+            data.SetSuspensionStrength(m_strenth);
+            //Min/MaxHeight also define the limits of the suspension and SuspensionTravel lowers this limit
             data.SetSuspensionMinLimit((BlockDefinition.MinHeight - m_height)*SuspensionTravel);
             data.SetSuspensionMaxLimit((BlockDefinition.MaxHeight - m_height)*SuspensionTravel);
-                    m_constraint = new HkConstraint(rotorBody, CubeGrid.Physics.RigidBody, data);
+            m_constraint = new HkConstraint(rotorBody, CubeGrid.Physics.RigidBody, data);
 
-                    m_constraint.WantRuntime = true;
-                    CubeGrid.Physics.AddConstraint(m_constraint);
-                    if (!m_constraint.InWorld)
-                    {
-                        Debug.Fail("Constraint not added!");
-                        CubeGrid.Physics.RemoveConstraint(m_constraint);
-                        m_constraint = null;
-                        return false;
-                    }
-                    m_constraint.Enabled = true;
-                    return true;
-                }
+            m_constraint.WantRuntime = true;
+            CubeGrid.Physics.AddConstraint(m_constraint);
+            if (!m_constraint.InWorld)
+            {
+                Debug.Fail("Constraint not added!");
+                CubeGrid.Physics.RemoveConstraint(m_constraint);
+                m_constraint = null;
+                return false;
+            }
+            m_constraint.Enabled = true;
+            return true;
+        }
 
         public override void ComputeTopQueryBox(out Vector3D pos, out Vector3 halfExtents, out Quaternion orientation)
         {
@@ -780,11 +789,18 @@ namespace Sandbox.Game.Entities.Cube
             if (CubeGrid.Physics.LinearVelocity.LengthSquared() > SpeedLimit * (1 / 3.6f) * SpeedLimit * (1 / 3.6f))
                 return;
 
+            //below optimized surfaceVelocity > speed limit
+            var wheelRadius = TopBlock.BlockDefinition.Size.X * TopGrid.GridSizeHalf;
+            var surfaceVelSq = TopGrid.Physics.AngularVelocity.LengthSquared();
+            var speedLimitSq = (SpeedLimit * (1 / 3.6f)) / wheelRadius;
+            speedLimitSq *= speedLimitSq;
+            if (surfaceVelSq > speedLimitSq)
+                return;
+
             var powerRatio = 1f;// m_rotorGrid.Physics.AngularVelocity.Length();
 
             if (MyFakes.SUSPENSION_POWER_RATIO)
             {
-                var wheelDiameter = TopBlock.BlockDefinition.Size.X * TopGrid.GridSize * 0.5f;
                 var lin = 1f;
                 if (MyDebugDrawSettings.DEBUG_DRAW_SUSPENSION_POWER)
                 {
@@ -804,7 +820,7 @@ namespace Sandbox.Game.Entities.Cube
 
                     }
                 }
-                lin = TopGrid.Physics.AngularVelocity.Length() * wheelDiameter; // linear velocity at tire surface
+                lin = TopGrid.Physics.AngularVelocity.Length() * wheelRadius; // linear velocity at tire surface
                 powerRatio = 1 - ((lin - 10) / (CubeGrid.Physics.RigidBody.MaxLinearVelocity - 20));
                 powerRatio = MathHelper.Clamp(powerRatio, 0, 1);
                 if (MyDebugDrawSettings.DEBUG_DRAW_SUSPENSION_POWER)
@@ -815,15 +831,13 @@ namespace Sandbox.Game.Entities.Cube
             }
 
             force *= powerRatio;
-            {
-                var body = TopGrid.Physics.RigidBody;
-                //VRageRender.MyRenderProxy.DebugDrawText2D(new Vector2(10, 60), "" + body.LinearVelocity.Length(), Color.Red, 1);
-                if (m_revolveInvert == forward)
-                    body.ApplyAngularImpulse(body.GetRigidBodyMatrix().Up * /*((3.5f + (float)Math.Pow(body.LinearVelocity.Length(),1.124f)) */ force);
-                else
-                    body.ApplyAngularImpulse(TopGrid.WorldMatrix.Down * /*((3.5f + (float)Math.Pow(body.LinearVelocity.Length(), 1.124f)) */ force);
-                m_wasAccelerating = true;
-            }
+            var body = TopGrid.Physics.RigidBody;
+            //VRageRender.MyRenderProxy.DebugDrawText2D(new Vector2(10, 60), "" + body.LinearVelocity.Length(), Color.Red, 1);
+            if (m_revolveInvert == forward)
+                body.ApplyAngularImpulse(body.GetRigidBodyMatrix().Up * /*((3.5f + (float)Math.Pow(body.LinearVelocity.Length(),1.124f)) */ force);
+            else
+                body.ApplyAngularImpulse(TopGrid.WorldMatrix.Down * /*((3.5f + (float)Math.Pow(body.LinearVelocity.Length(), 1.124f)) */ force);
+            m_wasAccelerating = true;
         }
 
         internal void Right()

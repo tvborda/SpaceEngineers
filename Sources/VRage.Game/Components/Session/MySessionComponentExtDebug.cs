@@ -186,10 +186,10 @@ namespace VRage.Game.SessionComponents
 #endif
                 m_listener.Start();
             }
-            catch (SocketException e)
+            catch (SocketException ex)
             {
                 MyLog.Default.WriteLine("Cannot start debug listener.");
-                MyLog.Default.WriteLine(e);
+                MyLog.Default.WriteLine(ex);
                 m_listener = null;
                 m_active = false;
                 return;
@@ -222,7 +222,8 @@ namespace VRage.Game.SessionComponents
                     }
                     else
                     {
-                        MyLog.Default.WriteLine(e);
+                        if (MyLog.Default != null && MyLog.Default.LogEnabled)
+                            MyLog.Default.WriteLine(e);
                         break;
                     }
                 }
